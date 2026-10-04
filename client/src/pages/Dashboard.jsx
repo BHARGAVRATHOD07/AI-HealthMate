@@ -84,17 +84,21 @@ const Dashboard = () => {
     }
   };
 
-  const activeMedicationsCount = medications.filter((m) => m.status === "Active").length;
-  const pendingRemindersCount = reminders.filter((r) => !r.completed).length;
+  const activeMedicationsCount = (Array.isArray(medications) ? medications : []).filter((m) => m.status === "Active").length;
+  const pendingRemindersCount = (Array.isArray(reminders) ? reminders : []).filter((r) => !r.completed).length;
+
+  const safeVitals = Array.isArray(vitals) ? vitals : [];
+  const safeRecords = Array.isArray(records) ? records : [];
+  const safeReminders = Array.isArray(reminders) ? reminders : [];
 
   // Format vitals for HealthCard component
   const vitalMetrics = [
     {
       id: "bp",
       title: "Blood Pressure",
-      value: vitals.find(v => v.type === "Blood Pressure")?.value || "118/78",
+      value: safeVitals.find(v => v.type === "Blood Pressure")?.value || "118/78",
       unit: "mmHg",
-      status: vitals.find(v => v.type === "Blood Pressure")?.status || "Normal",
+      status: safeVitals.find(v => v.type === "Blood Pressure")?.status || "Normal",
       change: "Normal Range",
       trend: "stable",
       lastUpdated: "Today"
@@ -102,9 +106,9 @@ const Dashboard = () => {
     {
       id: "hr",
       title: "Heart Rate",
-      value: vitals.find(v => v.type === "Heart Rate")?.value || "72",
+      value: safeVitals.find(v => v.type === "Heart Rate")?.value || "72",
       unit: "bpm",
-      status: vitals.find(v => v.type === "Heart Rate")?.status || "Normal",
+      status: safeVitals.find(v => v.type === "Heart Rate")?.status || "Normal",
       change: "Resting Rate",
       trend: "stable",
       lastUpdated: "Today"
@@ -112,9 +116,9 @@ const Dashboard = () => {
     {
       id: "sugar",
       title: "Blood Sugar",
-      value: vitals.find(v => v.type === "Blood Sugar")?.value || "95",
+      value: safeVitals.find(v => v.type === "Blood Sugar")?.value || "95",
       unit: "mg/dL",
-      status: vitals.find(v => v.type === "Blood Sugar")?.status || "Normal",
+      status: safeVitals.find(v => v.type === "Blood Sugar")?.status || "Normal",
       change: "Fasting",
       trend: "stable",
       lastUpdated: "Today"
@@ -122,9 +126,9 @@ const Dashboard = () => {
     {
       id: "weight",
       title: "Weight",
-      value: vitals.find(v => v.type === "Weight")?.value || "68.5",
+      value: safeVitals.find(v => v.type === "Weight")?.value || "68.5",
       unit: "kg",
-      status: vitals.find(v => v.type === "Weight")?.status || "Normal",
+      status: safeVitals.find(v => v.type === "Weight")?.status || "Normal",
       change: "Stable",
       trend: "stable",
       lastUpdated: "Today"
@@ -347,7 +351,7 @@ const Dashboard = () => {
                 }
               >
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
-                  {records.slice(0, 2).map((rec) => (
+                  {safeRecords.slice(0, 2).map((rec) => (
                     <RecordCard
                       key={rec._id || rec.id}
                       record={{
@@ -434,7 +438,7 @@ const Dashboard = () => {
                 }
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {reminders.slice(0, 4).map((reminder) => (
+                  {safeReminders.slice(0, 4).map((reminder) => (
                     <ReminderCard
                       key={reminder._id || reminder.id}
                       reminder={{
