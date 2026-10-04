@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Plus, Search, Upload } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import Card from "../components/common/Card";
@@ -8,13 +8,15 @@ import Modal from "../components/common/Modal";
 import RecordCard from "../components/cards/RecordCard";
 import EmptyState from "../components/common/EmptyState";
 import Toast from "../components/common/Toast";
+import LoadingSpinner from "../components/common/LoadingSpinner";
 
-import { initialHealthRecords } from "../data/mockData";
+import { getRecords, createRecord, deleteRecord } from "../api/api";
 
-const categories = ["All", "Lab Report", "Prescription", "Medical Report", "Vaccination", "Other"];
+const categories = ["All", "Lab Report", "Prescription", "Imaging", "Doctor Note", "Vaccination"];
 
 const HealthRecords = () => {
-  const [records, setRecords] = useState(initialHealthRecords);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
@@ -22,6 +24,7 @@ const HealthRecords = () => {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [viewRecord, setViewRecord] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // New Record Form State
   const [newTitle, setNewTitle] = useState("");
@@ -30,54 +33,83 @@ const HealthRecords = () => {
   const [newDoctor, setNewDoctor] = useState("");
   const [newFacility, setNewFacility] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [selectedFile, setSelectedFile] = useState(null);
 
-  const handleAddRecord = (e) => {
+  const fetchRecordsList = async () => {
+    try {
+      setLoading(true);
+      const res = await getRecords(selectedCategory, searchQuery);
+      if (res.success) {
+        setRecords(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch records:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecordsList();
+  }, [selectedCategory, searchQuery]);
+
+  const handleAddRecord = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const createdRecord = {
-      id: "rec_" + Date.now(),
-      title: newTitle,
-      category: newCategory,
-      date: newDate,
-      doctor: newDoctor || "Self Uploaded",
-      facility: newFacility || "Personal Hub",
-      description: newDescription || "Medical document stored in personal vault.",
-      fileSize: selectedFile ? `${(selectedFile.size / 1024 / 1024).toFixed(1)} MB` : "1.2 MB",
-      fileType: selectedFile ? selectedFile.name.split(".").pop().toUpperCase() : "PDF"
-    };
+    setSubmitting(true);
+    try {
+      const res = await createRecord({
+        title: newTitle,
+        category: newCategory,
+        date: newDate,
+        doctorName: newDoctor || "Dr. Medical Professional",
+        facility: newFacility || "City Hospital",
+        summary: newDescription || "Medical document stored securely in patient vault."
+      });
 
-    setRecords((prev) => [createdRecord, ...prev]);
-    setAddModalOpen(false);
-    setToastMessage(`Record "${newTitle}" added successfully!`);
+      if (res.success) {
+        setRecords((prev) => [res.data, ...prev]);
+        setToastMessage(`Record "${newTitle}" saved to MongoDB!`);
+      }
 
-    // Reset Form
-    setNewTitle("");
-    setNewDoctor("");
-    setNewFacility("");
-    setNewDescription("");
-    setSelectedFile(null);
+      setAddModalOpen(false);
+      setNewTitle("");
+      setNewDoctor("");
+      setNewFacility("");
+      setNewDescription("");
+    } catch (err) {
+      setToastMessage(`Error saving record: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDeleteRecord = (id) => {
-    setRecords((prev) => prev.filter((r) => r.id !== id));
-    setToastMessage("Record deleted successfully.");
+  const handleDeleteRecord = async (id) => {
+    try {
+      await deleteRecord(id);
+      setRecords((prev) => prev.filter((r) => (r._id !== id && r.id !== id)));
+      setToastMessage("Record deleted successfully.");
+    } catch (err) {
+      setToastMessage(`Error deleting record: ${err.message}`);
+    }
   };
 
   // Filter and Sort Logic
   const filteredRecords = records
     .filter((r) => {
       const matchesCategory = selectedCategory === "All" || r.category === selectedCategory;
+      const titleText = r.title || "";
+      const descText = r.summary || r.description || "";
+      const docText = r.doctorName || r.doctor || "";
       const matchesQuery =
-        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.doctor && r.doctor.toLowerCase().includes(searchQuery.toLowerCase()));
+        titleText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        descText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        docText.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesQuery;
     })
     .sort((a, b) => {
-      if (sortBy === "newest") return new Date(b.date) - new Date(a.date);
-      if (sortBy === "oldest") return new Date(a.date) - new Date(b.date);
+      if (sortBy === "newest") return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
+      if (sortBy === "oldest") return new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt);
       if (sortBy === "title") return a.title.localeCompare(b.title);
       return 0;
     });
@@ -98,26 +130,35 @@ const HealthRecords = () => {
         </div>
 
         <Button variant="primary" size="md" icon={Plus} onClick={() => setAddModalOpen(true)}>
-          Add Health Record
+          Upload New Record
         </Button>
       </div>
 
-      {/* Search & Filter Bar */}
-      <Card padding="1.1rem" style={{ marginBottom: "1.75rem" }}>
+      {/* Search Bar & Filter Controls */}
+      <Card padding="1rem" style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-          {/* Search Input */}
-          <div style={{ position: "relative", minWidth: "260px", flex: 1 }}>
-            <Search size={18} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-subtle)" }} />
+          {/* Search Box */}
+          <div style={{ position: "relative", flex: 1, minWidth: "260px" }}>
+            <Search
+              size={18}
+              style={{
+                position: "absolute",
+                left: "0.9rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-subtle)"
+              }}
+            />
             <input
               type="text"
-              placeholder="Search records by title, physician, or summary..."
+              placeholder="Search by report title, doctor name, or hospital..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: "100%",
-                padding: "0.55rem 0.9rem 0.55rem 2.5rem",
+                padding: "0.65rem 0.9rem 0.65rem 2.6rem",
                 fontSize: "0.875rem",
-                borderRadius: "0.65rem",
+                borderRadius: "0.75rem",
                 border: "1px solid var(--border-color)",
                 backgroundColor: "var(--bg-main)",
                 color: "var(--text-main)",
@@ -128,85 +169,129 @@ const HealthRecords = () => {
 
           {/* Sort Dropdown */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Sort:</span>
+            <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Sort by:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               style={{
-                padding: "0.55rem 0.85rem",
+                padding: "0.6rem 0.85rem",
                 fontSize: "0.85rem",
-                borderRadius: "0.65rem",
+                borderRadius: "0.75rem",
                 border: "1px solid var(--border-color)",
                 backgroundColor: "var(--bg-main)",
                 color: "var(--text-main)",
                 outline: "none",
-                cursor: "pointer"
+                fontWeight: "600"
               }}
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
-              <option value="title">Title (A-Z)</option>
+              <option value="title">Alphabetical (A-Z)</option>
             </select>
           </div>
         </div>
-
-        {/* Category Pills */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem", paddingTop: "1rem", borderTop: "1px border var(--border-color)" }}>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              style={{
-                padding: "0.35rem 0.85rem",
-                borderRadius: "9999px",
-                fontSize: "0.8125rem",
-                fontWeight: "600",
-                border: selectedCategory === cat ? "1px solid #0284c7" : "1px solid var(--border-color)",
-                backgroundColor: selectedCategory === cat ? "rgba(2, 132, 199, 0.12)" : "var(--bg-main)",
-                color: selectedCategory === cat ? "#0284c7" : "var(--text-muted)",
-                cursor: "pointer",
-                transition: "all 0.15s ease"
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
       </Card>
 
-      {/* Record Cards Grid */}
-      {filteredRecords.length > 0 ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: "1.25rem" }}>
-          {filteredRecords.map((rec) => (
-            <RecordCard
-              key={rec.id}
-              record={rec}
-              onView={(r) => setViewRecord(r)}
-              onDelete={handleDeleteRecord}
-            />
-          ))}
+      {/* Category Filter Chips */}
+      <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.5rem", marginBottom: "1.5rem" }}>
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            style={{
+              padding: "0.45rem 1rem",
+              borderRadius: "0.75rem",
+              fontSize: "0.85rem",
+              fontWeight: "600",
+              border: selectedCategory === cat ? "1px solid #0284c7" : "1px solid var(--border-color)",
+              backgroundColor: selectedCategory === cat ? "rgba(2, 132, 199, 0.12)" : "var(--bg-card)",
+              color: selectedCategory === cat ? "#0284c7" : "var(--text-muted)",
+              cursor: "pointer",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}>
+          <LoadingSpinner size="lg" text="Loading health records vault..." />
         </div>
       ) : (
-        <EmptyState
-          icon={FileText}
-          title="No health records found"
-          description="Try adjusting your search filters or click below to upload a record."
-          actionLabel="Add Health Record"
-          onAction={() => setAddModalOpen(true)}
-        />
+        /* Records Grid Display */
+        filteredRecords.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
+            {filteredRecords.map((record) => (
+              <RecordCard
+                key={record._id || record.id}
+                record={{
+                  ...record,
+                  id: record._id || record.id,
+                  doctor: record.doctorName || record.doctor,
+                  date: record.date ? new Date(record.date).toLocaleDateString() : "Recent",
+                  fileType: record.category,
+                  fileSize: "1.2 MB",
+                  description: record.summary || record.description
+                }}
+                onView={(rec) => setViewRecord(rec)}
+                onDelete={handleDeleteRecord}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={FileText}
+            title="No medical records found"
+            description="No documents matched your filter. Upload your lab reports or prescriptions to store them safely."
+            actionLabel="Upload Record"
+            onAction={() => setAddModalOpen(true)}
+          />
+        )
       )}
 
-      {/* Add Record Modal */}
+      {/* Record Document Viewer Modal */}
+      {viewRecord && (
+        <Modal
+          isOpen={!!viewRecord}
+          onClose={() => setViewRecord(null)}
+          title={viewRecord.title}
+          subtitle={`Category: ${viewRecord.category || viewRecord.fileType} • Date: ${viewRecord.date}`}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+            <div>
+              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Physician / Health Facility</div>
+              <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)", marginTop: "0.15rem" }}>
+                {viewRecord.doctorName || viewRecord.doctor || "Medical Specialist"} ({viewRecord.facility || "Diagnostic Clinic"})
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Clinical Impression / Summary</div>
+              <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginTop: "0.25rem", lineHeight: 1.5 }}>
+                {viewRecord.summary || viewRecord.description}
+              </p>
+            </div>
+
+            <div style={{ padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "var(--bg-main)", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+              Document Vault Status: Encrypted & Verified ({viewRecord.category || viewRecord.fileType})
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add New Record Modal */}
       <Modal
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}
-        title="Upload New Health Record"
-        subtitle="Add a lab report, prescription, or clinical summary to your vault."
+        title="Upload Medical Record"
+        subtitle="Add a new lab result, imaging report, or prescription to your vault"
       >
         <form onSubmit={handleAddRecord} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
           <Input
-            label="Record Title"
-            placeholder="e.g. Blood Test Report, Lipid Panel"
+            label="Report / Document Title"
+            placeholder="e.g. Lipid Profile, Echocardiogram Report"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             required
@@ -229,9 +314,11 @@ const HealthRecords = () => {
                   outline: "none"
                 }}
               >
-                {categories.filter((c) => c !== "All").map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
+                <option value="Lab Report">Lab Report</option>
+                <option value="Prescription">Prescription</option>
+                <option value="Imaging">Imaging / X-Ray</option>
+                <option value="Doctor Note">Doctor Note</option>
+                <option value="Vaccination">Vaccination</option>
               </select>
             </div>
 
@@ -246,24 +333,25 @@ const HealthRecords = () => {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
             <Input
-              label="Doctor / Specialist"
-              placeholder="e.g. Dr. Eleanor Vance"
+              label="Doctor / Physician Name"
+              placeholder="e.g. Dr. Sarah Jenkins"
               value={newDoctor}
               onChange={(e) => setNewDoctor(e.target.value)}
             />
+
             <Input
-              label="Clinic / Diagnostic Facility"
-              placeholder="e.g. City Health Lab"
+              label="Hospital / Clinic Facility"
+              placeholder="e.g. Quest Diagnostics"
               value={newFacility}
               onChange={(e) => setNewFacility(e.target.value)}
             />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Description / Clinical Notes</label>
+            <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Notes / Clinical Summary</label>
             <textarea
               rows={3}
-              placeholder="Summarize key findings or instructions..."
+              placeholder="Enter brief key findings or diagnostic summary..."
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
               style={{
@@ -280,85 +368,16 @@ const HealthRecords = () => {
             />
           </div>
 
-          {/* File Upload Box Mockup */}
-          <div
-            style={{
-              border: "2px dashed var(--border-color)",
-              borderRadius: "0.85rem",
-              padding: "1.25rem",
-              textAlign: "center",
-              backgroundColor: "var(--bg-main)",
-              cursor: "pointer"
-            }}
-          >
-            <input
-              type="file"
-              id="file-upload"
-              style={{ display: "none" }}
-              onChange={(e) => setSelectedFile(e.target.files[0])}
-            />
-            <label htmlFor="file-upload" style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
-              <Upload size={24} color="#0284c7" />
-              <span style={{ fontSize: "0.875rem", fontWeight: "600", color: "var(--text-main)" }}>
-                {selectedFile ? selectedFile.name : "Click to select PDF or image file"}
-              </span>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Supported formats: PDF, PNG, JPG (Max 10MB)</span>
-            </label>
-          </div>
-
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <Button variant="outline" size="md" onClick={() => setAddModalOpen(false)}>
+            <Button variant="outline" size="md" onClick={() => setAddModalOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md">
-              Save Record
+            <Button type="submit" variant="primary" size="md" disabled={submitting}>
+              {submitting ? "Saving..." : "Save to Vault"}
             </Button>
           </div>
         </form>
       </Modal>
-
-      {/* View Record Details Modal */}
-      {viewRecord && (
-        <Modal
-          isOpen={!!viewRecord}
-          onClose={() => setViewRecord(null)}
-          title={viewRecord.title}
-          subtitle={`Type: ${viewRecord.category} • Date: ${viewRecord.date}`}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              <div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: "600" }}>Physician</div>
-                <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)" }}>
-                  {viewRecord.doctor || "N/A"}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: "600" }}>Diagnostic Facility</div>
-                <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)" }}>
-                  {viewRecord.facility || "N/A"}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: "600", marginBottom: "0.25rem" }}>Clinical Summary & Findings</div>
-              <div style={{ padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "var(--bg-main)", fontSize: "0.9rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-                {viewRecord.description}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "0.85rem", borderTop: "1px solid var(--border-color)" }}>
-              <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                {viewRecord.fileType} File ({viewRecord.fileSize})
-              </span>
-              <Button variant="primary" size="sm" onClick={() => setToastMessage("Downloading record file...")}>
-                Download Document
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </DashboardLayout>
   );
 };

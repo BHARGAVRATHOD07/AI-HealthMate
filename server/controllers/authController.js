@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const seedUserData = require("../utils/seedUserData");
 
 // ─── Helper: Generate a signed JWT ────────────────────────────────────────────
 const generateToken = (userId) => {
@@ -47,6 +48,9 @@ const register = async (req, res) => {
         });
 
         const token = generateToken(user._id);
+
+        // Auto-seed default health records/vitals/medications/reminders
+        await seedUserData(user._id);
 
         res.status(201).json({
             success: true,
@@ -102,6 +106,9 @@ const login = async (req, res) => {
         }
 
         const token = generateToken(user._id);
+
+        // Auto-seed default health records/vitals/medications/reminders
+        await seedUserData(user._id);
 
         res.status(200).json({
             success: true,

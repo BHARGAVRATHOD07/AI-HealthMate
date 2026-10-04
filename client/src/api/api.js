@@ -77,19 +77,145 @@ export const sendAIMessage = async (message, history = []) => {
   return data;
 };
 
-// ─── USERS (legacy admin endpoint) ────────────────────────────────────────────
+// ─── VITALS ──────────────────────────────────────────────────────────────────
+export const getVitals = async (type) => {
+  const url = type ? `${API_URL}/api/vitals?type=${encodeURIComponent(type)}` : `${API_URL}/api/vitals`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to fetch vitals.");
+  return data;
+};
 
+export const createVital = async (vitalData) => {
+  const response = await fetch(`${API_URL}/api/vitals`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(vitalData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to create vital reading.");
+  return data;
+};
 
-/**
- * Fetch all registered users (admin/debug use only).
- * Endpoint: GET /api/users
- */
-export const fetchUsers = async () => {
-  const response = await fetch(`${API_URL}/api/users`, {
+export const deleteVital = async (id) => {
+  const response = await fetch(`${API_URL}/api/vitals/${id}`, {
+    method: "DELETE",
     headers: getAuthHeaders(),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.message || "Failed to fetch users.");
+  if (!response.ok) throw new Error(data.message || "Failed to delete vital reading.");
+  return data;
+};
+
+// ─── MEDICATIONS ─────────────────────────────────────────────────────────────
+export const getMedications = async () => {
+  const response = await fetch(`${API_URL}/api/medications`, { headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to fetch medications.");
+  return data;
+};
+
+export const createMedication = async (medData) => {
+  const response = await fetch(`${API_URL}/api/medications`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(medData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to add medication.");
+  return data;
+};
+
+export const updateMedication = async (id, medData) => {
+  const response = await fetch(`${API_URL}/api/medications/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(medData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to update medication.");
+  return data;
+};
+
+export const deleteMedication = async (id) => {
+  const response = await fetch(`${API_URL}/api/medications/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to delete medication.");
+  return data;
+};
+
+// ─── REMINDERS ───────────────────────────────────────────────────────────────
+export const getReminders = async () => {
+  const response = await fetch(`${API_URL}/api/reminders`, { headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to fetch reminders.");
+  return data;
+};
+
+export const createReminder = async (reminderData) => {
+  const response = await fetch(`${API_URL}/api/reminders`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(reminderData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to add reminder.");
+  return data;
+};
+
+export const toggleReminder = async (id) => {
+  const response = await fetch(`${API_URL}/api/reminders/${id}/toggle`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to toggle reminder.");
+  return data;
+};
+
+export const deleteReminder = async (id) => {
+  const response = await fetch(`${API_URL}/api/reminders/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to delete reminder.");
+  return data;
+};
+
+// ─── HEALTH RECORDS ──────────────────────────────────────────────────────────
+export const getRecords = async (category = "All", search = "") => {
+  const params = new URLSearchParams();
+  if (category && category !== "All") params.append("category", category);
+  if (search) params.append("search", search);
+
+  const response = await fetch(`${API_URL}/api/records?${params.toString()}`, { headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to fetch records.");
+  return data;
+};
+
+export const createRecord = async (recordData) => {
+  const response = await fetch(`${API_URL}/api/records`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(recordData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to add record.");
+  return data;
+};
+
+export const deleteRecord = async (id) => {
+  const response = await fetch(`${API_URL}/api/records/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to delete record.");
   return data;
 };
 
@@ -98,7 +224,22 @@ export default {
   registerUser,
   loginUser,
   getAuthenticatedUser,
+  sendAIMessage,
   fetchUsers,
+  getVitals,
+  createVital,
+  deleteVital,
+  getMedications,
+  createMedication,
+  updateMedication,
+  deleteMedication,
+  getReminders,
+  createReminder,
+  toggleReminder,
+  deleteReminder,
+  getRecords,
+  createRecord,
+  deleteRecord,
   getAuthHeaders,
   API_URL,
 };

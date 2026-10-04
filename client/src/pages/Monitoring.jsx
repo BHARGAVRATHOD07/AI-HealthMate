@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Activity, Heart, Scale, Droplet, Plus, TrendingUp } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import Card from "../components/common/Card";
@@ -6,7 +6,9 @@ import Button from "../components/common/Button";
 import Input from "../components/common/Input";
 import Modal from "../components/common/Modal";
 import Toast from "../components/common/Toast";
+import LoadingSpinner from "../components/common/LoadingSpinner";
 
+import { getVitals, createVital } from "../api/api";
 import { chartTrendsData } from "../data/mockData";
 
 // Interactive Custom SVG Chart Component
@@ -17,15 +19,15 @@ const VitalTrendChart = ({ data = [], metricKey = "value", color = "#0284c7" }) 
   const height = 220;
   const padding = 35;
 
-  const values = data.map((d) => (typeof d[metricKey] === "number" ? d[metricKey] : d.systolic || 70));
+  const values = data.map((d) => (typeof d[metricKey] === "number" ? d[metricKey] : parseFloat(d.value) || 70));
   const minVal = Math.min(...values) - 5;
   const maxVal = Math.max(...values) + 5;
 
   const points = data.map((d, index) => {
     const x = padding + (index / (data.length - 1 || 1)) * (width - 2 * padding);
-    const val = typeof d[metricKey] === "number" ? d[metricKey] : d.systolic || 70;
+    const val = typeof d[metricKey] === "number" ? d[metricKey] : parseFloat(d.value) || 70;
     const y = height - padding - ((val - minVal) / (maxVal - minVal || 1)) * (height - 2 * padding);
-    return { x, y, label: d.time, value: val };
+    return { x, y, label: d.time || d.loggedAt ? new Date(d.loggedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Log", value: val };
   });
 
   const pathD = points.reduce(
@@ -108,39 +110,93 @@ const Monitoring = () => {
   const [newVal, setNewVal] = useState("");
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [newNotes, setNewNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const [trends, setTrends] = useState(chartTrendsData);
+  const [loading, setLoading] = useState(true);
 
   const metricsInfo = {
-    heartRate: { name: "Heart Rate", unit: "bpm", target: "60-100 bpm", icon: Heart, color: "#ef4444" },
-    bloodPressure: { name: "Blood Pressure", unit: "mmHg", target: "< 120/80 mmHg", icon: Activity, color: "#0284c7" },
-    bloodGlucose: { name: "Blood Glucose", unit: "mg/dL", target: "70-99 mg/dL", icon: Droplet, color: "#10b981" },
-    weight: { name: "Weight Log", unit: "kg", target: "70-74 kg", icon: Scale, color: "#0d9488" }
+    heartRate: { name: "Heart Rate", apiType: "Heart Rate", unit: "bpm", target: "60-100 bpm", icon: Heart, color: "#ef4444" },
+    bloodPressure: { name: "Blood Pressure", apiType: "Blood Pressure", unit: "mmHg", target: "< 120/80 mmHg", icon: Activity, color: "#0284c7" },
+    bloodGlucose: { name: "Blood Glucose", apiType: "Blood Sugar", unit: "mg/dL", target: "70-99 mg/dL", icon: Droplet, color: "#10b981" },
+    weight: { name: "Weight Log", apiType: "Weight", unit: "kg", target: "70-74 kg", icon: Scale, color: "#0d9488" }
   };
 
   const currentInfo = metricsInfo[selectedMetric] || metricsInfo.heartRate;
+
+  useEffect(() => {
+    const fetchVitalsData = async () => {
+      try {
+        setLoading(true);
+        const response = await getVitals();
+        if (response.success && response.data.length > 0) {
+          // Group vitals by type for our chart trends
+          const fetchedTrends = { ...chartTrendsData };
+          
+          response.data.forEach(vital => {
+            let key = "heartRate";
+            if (vital.type === "Blood Pressure") key = "bloodPressure";
+            if (vital.type === "Blood Sugar") key = "bloodGlucose";
+            if (vital.type === "Weight") key = "weight";
+
+            const numVal = parseFloat(vital.value) || 70;
+            const timeLabel = new Date(vital.loggedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (fetchedTrends[key]) {
+              fetchedTrends[key].weekly.push({ time: timeLabel, value: numVal });
+            }
+          });
+
+          setTrends(fetchedTrends);
+        }
+      } catch (err) {
+        console.error("Failed to load vitals:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVitalsData();
+  }, []);
+
   const currentChartData = trends[selectedMetric]?.[timeframe] || [];
 
-  const handleAddMeasurement = (e) => {
+  const handleAddMeasurement = async (e) => {
     e.preventDefault();
     if (!newVal) return;
 
-    const newPoint = {
-      time: "Today",
-      value: parseFloat(newVal)
-    };
+    setSubmitting(true);
+    try {
+      await createVital({
+        type: currentInfo.apiType,
+        value: newVal,
+        unit: currentInfo.unit,
+        notes: newNotes,
+        status: "Normal"
+      });
 
-    setTrends((prev) => ({
-      ...prev,
-      [selectedMetric]: {
-        ...prev[selectedMetric],
-        [timeframe]: [...(prev[selectedMetric]?.[timeframe] || []), newPoint]
-      }
-    }));
+      const newPoint = {
+        time: "Just now",
+        value: parseFloat(newVal) || 70
+      };
 
-    setAddModalOpen(false);
-    setNewVal("");
-    setToastMessage(`${currentInfo.name} reading (${newVal} ${currentInfo.unit}) logged!`);
+      setTrends((prev) => ({
+        ...prev,
+        [selectedMetric]: {
+          ...prev[selectedMetric],
+          [timeframe]: [...(prev[selectedMetric]?.[timeframe] || []), newPoint]
+        }
+      }));
+
+      setAddModalOpen(false);
+      setNewVal("");
+      setNewNotes("");
+      setToastMessage(`${currentInfo.name} reading (${newVal} ${currentInfo.unit}) saved to MongoDB!`);
+    } catch (err) {
+      setToastMessage(`Error logging vital: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -240,11 +296,17 @@ const Monitoring = () => {
         }
       >
         <div style={{ marginTop: "1rem" }}>
-          <VitalTrendChart
-            data={currentChartData}
-            metricKey="value"
-            color={currentInfo.color}
-          />
+          {loading ? (
+            <div style={{ padding: "2rem", display: "flex", justifyContent: "center" }}>
+              <LoadingSpinner size="md" text="Loading vital analytics..." />
+            </div>
+          ) : (
+            <VitalTrendChart
+              data={currentChartData}
+              metricKey="value"
+              color={currentInfo.color}
+            />
+          )}
         </div>
       </Card>
 
@@ -296,11 +358,11 @@ const Monitoring = () => {
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <Button variant="outline" size="md" onClick={() => setAddModalOpen(false)}>
+            <Button variant="outline" size="md" onClick={() => setAddModalOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md">
-              Save Measurement
+            <Button type="submit" variant="primary" size="md" disabled={submitting}>
+              {submitting ? "Saving..." : "Save Measurement"}
             </Button>
           </div>
         </form>
