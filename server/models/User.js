@@ -18,7 +18,8 @@ const userSchema = new mongoose.Schema(
 
         password: {
             type: String,
-            required: true
+            required: true,
+            select: false   // never returned in queries unless explicitly: .select("+password")
         }
     },
     {

@@ -15,12 +15,47 @@ import AIAssistant from "./pages/AIAssistant";
 import Reminders from "./pages/Reminders";
 import Settings from "./pages/Settings";
 
-// Protected Route Component for Dashboard area
+// Protected Route — waits for session restore before deciding to redirect
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+
+  // While verifying the stored JWT, render a full-page loader
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "var(--bg-main)",
+        flexDirection: "column",
+        gap: "1rem"
+      }}>
+        <div style={{
+          width: "40px", height: "40px",
+          border: "3px solid var(--border-color)",
+          borderTop: "3px solid #0284c7",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite"
+        }} />
+        <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>Verifying session...</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+  return children;
+};
+
+
+// Guest Route — redirects authenticated users away from login/register
+const GuestRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return null; // wait silently, ProtectedRoute handles the spinner
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -29,8 +64,8 @@ function AppContent() {
     <Routes>
       {/* Public Pages */}
       <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/login"    element={<GuestRoute><Login /></GuestRoute>} />
+      <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
 
       {/* Protected Patient Dashboard Pages */}
       <Route

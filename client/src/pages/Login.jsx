@@ -39,20 +39,21 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setLoading(true);
-    setTimeout(() => {
-      const success = login(email, password);
-      setLoading(false);
-      if (success) {
-        navigate("/dashboard");
-      } else {
-        setErrors({ general: "Invalid email or password" });
-      }
-    }, 600);
+    setErrors({});
+
+    const result = await login(email, password);
+    setLoading(false);
+
+    if (result.success) {
+      navigate("/dashboard");
+    } else {
+      setErrors({ general: result.message || "Invalid email or password." });
+    }
   };
 
   const handleForgotSubmit = (e) => {
