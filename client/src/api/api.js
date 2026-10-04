@@ -60,7 +60,25 @@ export const getAuthenticatedUser = async () => {
   return data;
 };
 
+/**
+ * Send a message to the AI Health Assistant (Gemini).
+ * Endpoint: POST /api/ai/chat  (requires JWT)
+ * Body: { message: string, history: Array<{sender, text}> }
+ * Returns: { success, data: { reply, model, timestamp } }
+ */
+export const sendAIMessage = async (message, history = []) => {
+  const response = await fetch(`${API_URL}/api/ai/chat`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message, history }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "AI service error.");
+  return data;
+};
+
 // ─── USERS (legacy admin endpoint) ────────────────────────────────────────────
+
 
 /**
  * Fetch all registered users (admin/debug use only).

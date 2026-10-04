@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, Plus, Paperclip, MessageSquare, ShieldAlert } from "lucide-react";
+import { Bot, Send, Plus, MessageSquare, ShieldAlert, AlertCircle, RefreshCw } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import Button from "../components/common/Button";
 import { initialAIChats, suggestedAIQuestions } from "../data/mockData";
+import { sendAIMessage } from "../api/api";
 
 const AIAssistant = () => {
   const [chats, setChats] = useState(initialAIChats);
   const [activeChatId, setActiveChatId] = useState(initialAIChats[0].id);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -22,9 +24,11 @@ const AIAssistant = () => {
     scrollToBottom();
   }, [currentChat.messages, isTyping]);
 
-  const handleSendMessage = (textToSend) => {
-    const query = textToSend || inputText;
-    if (!query.trim()) return;
+  const handleSendMessage = async (textToSend) => {
+    const query = (textToSend || inputText).trim();
+    if (!query) return;
+
+    setAiError(null);
 
     const userMsg = {
       sender: "user",
@@ -32,11 +36,22 @@ const AIAssistant = () => {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
-    // Append User Message
+    // Get current history BEFORE adding the new user message (for context)
+    const currentHistory = chats.find(c => c.id === activeChatId)?.messages || [];
+
+    // Append user message immediately to UI
     setChats((prev) =>
       prev.map((c) =>
         c.id === activeChatId
-          ? { ...c, messages: [...c.messages, userMsg], updatedAt: "Just now" }
+          ? {
+              ...c,
+              messages: [...c.messages, userMsg],
+              updatedAt: "Just now",
+              // Auto-generate chat title from first user message
+              title: c.messages.filter(m => m.sender === "user").length === 0
+                ? query.length > 40 ? query.slice(0, 40) + "..." : query
+                : c.title
+            }
           : c
       )
     );
@@ -44,26 +59,13 @@ const AIAssistant = () => {
     if (!textToSend) setInputText("");
     setIsTyping(true);
 
-    // Simulate AI response engine
-    setTimeout(() => {
-      let aiText;
-
-      const qLower = query.toLowerCase();
-      if (qLower.includes("blood pressure")) {
-        aiText = "A normal blood pressure reading is generally **below 120/80 mmHg**.\n\n- **Systolic (<120)**: Pressure when heart beats.\n- **Diastolic (<80)**: Pressure when heart rests.\n\nIf your readings consistently exceed 130/80 mmHg, keep a daily log and discuss with your physician.";
-      } else if (qLower.includes("record") || qLower.includes("lab")) {
-        aiText = "Based on your uploaded **Comprehensive Metabolic Panel (Aug 2026)**:\n\n- **Fasting Glucose**: 94 mg/dL *(Optimal)*\n- **Lipid Panel**: HDL & LDL ratios within recommended ranges.\n- **Kidney Function**: Normal Creatinine level.\n\nEverything appears stable based on your documented records!";
-      } else if (qLower.includes("medication") || qLower.includes("schedule")) {
-        aiText = "Here is your active medication schedule breakdown:\n\n1. **Vitamin D3 (2000 IU)**: Morning with breakfast.\n2. **Albuterol Inhaler**: As needed for exercise/asthma.\n3. **Omega-3 Fish Oil**: Morning & Evening with meals.\n\nAlways ensure consistent timing for maximum effectiveness!";
-      } else if (qLower.includes("track")) {
-        aiText = "Key daily metrics recommended for personal tracking:\n\n1. **Morning Blood Pressure** (rest 5 mins prior)\n2. **Fasting Glucose** (if monitoring metabolic health)\n3. **Hydration Goal** (2 - 2.5 Liters per day)\n4. **30-Minute Physical Activity**";
-      } else {
-        aiText = `I understand you are asking about: "${query}".\n\nAI HealthMate helps organize your profile, track vital readings, and organize prescriptions. For personalized medical decisions or symptoms, always consult your physician.`;
-      }
+    try {
+      // Send to real Gemini backend — pass history for multi-turn context
+      const response = await sendAIMessage(query, currentHistory);
 
       const aiMsg = {
         sender: "ai",
-        text: aiText,
+        text: response.data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
 
@@ -74,8 +76,11 @@ const AIAssistant = () => {
             : c
         )
       );
+    } catch (err) {
+      setAiError(err.message || "Failed to get a response. Please try again.");
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
 
   const handleNewChat = () => {
@@ -193,7 +198,7 @@ const AIAssistant = () => {
           </div>
 
           <div style={{ fontSize: "0.75rem", color: "var(--text-subtle)", textAlign: "center", paddingTop: "0.75rem", borderTop: "1px solid var(--border-color)" }}>
-            Powered by AI HealthMate Assistant Engine
+            Powered by Google Gemini AI
           </div>
         </div>
 
@@ -239,8 +244,8 @@ const AIAssistant = () => {
                 <h3 style={{ fontSize: "1rem", fontWeight: "700", color: "var(--text-main)", margin: 0 }}>
                   AI Health Assistant
                 </h3>
-                <span style={{ fontSize: "0.75rem", color: "#10b981", fontWeight: "600" }}>
-                  ● Active & Ready to Assist
+                <span style={{ fontSize: "0.75rem", color: isTyping ? "#f59e0b" : "#10b981", fontWeight: "600" }}>
+                  {isTyping ? "⟳ Thinking..." : "● Powered by Gemini"}
                 </span>
               </div>
             </div>
@@ -301,7 +306,30 @@ const AIAssistant = () => {
                       boxShadow: "var(--shadow-sm)"
                     }}
                   >
-                    <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                  <div
+                    style={{
+                      fontSize: "0.9rem",
+                      lineHeight: 1.6,
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: isAI
+                        ? msg.text
+                            // Bold
+                            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                            // Italic
+                            .replace(/\*(.+?)\*/g, "<em>$1</em>")
+                            // Numbered list items
+                            .replace(/^(\d+)\. (.+)$/gm, "<li style='margin-left:1.1rem;margin-bottom:0.2rem'>$2</li>")
+                            // Bullet list items
+                            .replace(/^[-•] (.+)$/gm, "<li style='margin-left:1.1rem;margin-bottom:0.2rem'>$1</li>")
+                            // Wrap consecutive <li> in <ul>
+                            .replace(/(<li[^>]*>.*<\/li>\n?)+/g, (m) => `<ul style='margin:0.4rem 0;padding:0'>${m}</ul>`)
+                            // Line breaks
+                            .replace(/\n\n/g, "<br/><br/>")
+                            .replace(/\n/g, "<br/>")
+                        : msg.text
+                    }}
+                  />
                     <div
                       style={{
                         fontSize: "0.7rem",
@@ -338,9 +366,30 @@ const AIAssistant = () => {
             })}
 
             {isTyping && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                <Bot size={18} color="#0284c7" />
-                <span>AI HealthMate Assistant is thinking...</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--text-muted)", fontSize: "0.875rem", padding: "0.5rem 0" }}>
+                <div style={{ width: "34px", height: "34px", borderRadius: "50%", backgroundColor: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Bot size={18} color="#fff" />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span>AI HealthMate is thinking</span>
+                  <span style={{ display: "flex", gap: "3px" }}>
+                    {[0, 1, 2].map(i => (
+                      <span key={i} style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#0284c7", display: "inline-block", animation: `bounce 1.2s ${i * 0.2}s infinite ease-in-out` }} />
+                    ))}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {aiError && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "0.875rem", padding: "0.85rem 1rem", fontSize: "0.875rem", color: "#ef4444" }}>
+                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: "1px" }} />
+                <div style={{ flex: 1 }}>
+                  <strong>Error:</strong> {aiError}
+                </div>
+                <button onClick={() => setAiError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: 0, display: "flex", alignItems: "center" }}>
+                  <RefreshCw size={15} />
+                </button>
               </div>
             )}
 
