@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, Plus, MessageSquare, ShieldAlert, AlertCircle, RefreshCw } from "lucide-react";
+import { Bot, Send, Plus, MessageSquare, ShieldAlert, AlertCircle, RefreshCw, Paperclip } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import Button from "../components/common/Button";
 import { initialAIChats, suggestedAIQuestions } from "../data/mockData";
