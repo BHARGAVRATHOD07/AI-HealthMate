@@ -225,7 +225,6 @@ export default {
   loginUser,
   getAuthenticatedUser,
   sendAIMessage,
-  fetchUsers,
   getVitals,
   createVital,
   deleteVital,
