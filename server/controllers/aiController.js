@@ -1,7 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // ─── System Prompt ─────────────────────────────────────────────────────────────
-// This shapes Gemini's personality and scope as a health information assistant
 const SYSTEM_PROMPT = `You are AI HealthMate, a friendly and knowledgeable health information assistant integrated into a patient health management dashboard.
 
 Your role:
@@ -29,10 +28,27 @@ Critical rules you MUST follow:
 
 Format responses using markdown when helpful (bold key terms, use bullet lists for multiple items).`;
 
+// Helper for retrying transient errors like 503 (high demand)
+const callWithRetry = async (fn, maxRetries = 2, delayMs = 1000) => {
+    let lastErr;
+    for (let i = 0; i <= maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (err) {
+            lastErr = err;
+            if ((err.message?.includes("503") || err.message?.includes("high demand") || err.status === 503) && i < maxRetries) {
+                await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastErr;
+};
+
 // ─── POST /api/ai/chat ─────────────────────────────────────────────────────────
 const chat = async (req, res) => {
     try {
-        // Validate API key is configured
         if (!process.env.GEMINI_API_KEY) {
             return res.status(503).json({
                 success: false,
@@ -49,44 +65,39 @@ const chat = async (req, res) => {
             });
         }
 
-        // Initialize Gemini
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-3.8-flash",
             systemInstruction: SYSTEM_PROMPT
         });
 
-        // Build conversation history for Gemini's multi-turn chat
-        // history format: [{ role: "user" | "model", parts: [{ text: "..." }] }]
+        // Format prior history for Gemini startChat
         const formattedHistory = Array.isArray(history)
             ? history
-                .filter(msg => msg.sender !== "ai" || msg.text) // skip empty
+                .filter(msg => msg.text && (msg.sender === "user" || msg.sender === "ai" || msg.sender === "bot" || msg.role))
                 .map(msg => ({
-                    role: msg.sender === "user" ? "user" : "model",
+                    role: (msg.sender === "user" || msg.role === "user") ? "user" : "model",
                     parts: [{ text: msg.text }]
                 }))
             : [];
 
-        // Start a multi-turn chat session with history
         const chatSession = model.startChat({
             history: formattedHistory,
             generationConfig: {
                 maxOutputTokens: 1024,
                 temperature: 0.7,
-                topK: 40,
-                topP: 0.95,
             }
         });
 
-        // Send the new message and stream/await the response
-        const result = await chatSession.sendMessage(message.trim());
+        // Send user message with retry for transient 503s
+        const result = await callWithRetry(() => chatSession.sendMessage(message.trim()));
         const responseText = result.response.text();
 
         res.status(200).json({
             success: true,
             data: {
                 reply: responseText,
-                model: "gemini-1.5-flash",
+                model: "gemini-3.8-flash",
                 timestamp: new Date().toISOString()
             }
         });
@@ -94,7 +105,6 @@ const chat = async (req, res) => {
     } catch (error) {
         console.error("Gemini AI Error:", error.message);
 
-        // Handle specific Gemini API errors
         if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("API key")) {
             return res.status(401).json({
                 success: false,
