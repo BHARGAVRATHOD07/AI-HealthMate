@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { logInternalError } = require("../utils/errorLogging");
 
 const protect = async (req, res, next) => {
     try {
@@ -51,10 +52,10 @@ const protect = async (req, res, next) => {
                 message: "Invalid token. Please log in again."
             });
         }
+        logInternalError("Authentication middleware", error);
         res.status(500).json({
             success: false,
-            message: "Authentication error.",
-            error: error.message
+            message: "Authentication failed."
         });
     }
 };

@@ -4,13 +4,24 @@ const crypto = require("crypto");
 const User = require("../models/User");
 const PasswordResetOtp = require("../models/PasswordResetOtp");
 const { getSmtpConfig, sendPasswordResetOtp } = require("../utils/emailService");
+const { logInternalError } = require("../utils/errorLogging");
 
 const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
 const PASSWORD_RESET_RESEND_COOLDOWN_MS = 60 * 1000;
 const PASSWORD_RESET_MAX_ATTEMPTS = 5;
 
+const getPasswordResetOtpSecret = () => {
+    const secret = process.env.PASSWORD_RESET_OTP_SECRET;
+    if (typeof secret !== "string" || Buffer.byteLength(secret) < 32) {
+        const error = new Error("PASSWORD_RESET_OTP_SECRET is not configured.");
+        error.code = "PASSWORD_RESET_SECRET_NOT_CONFIGURED";
+        throw error;
+    }
+    return secret;
+};
+
 const hashPasswordResetOtp = (email, code) => crypto
-    .createHmac("sha256", process.env.JWT_SECRET)
+    .createHmac("sha256", getPasswordResetOtpSecret())
     .update(`${email}:${code}`)
     .digest("hex");
 
@@ -27,12 +38,15 @@ const requestPasswordReset = async (req, res) => {
 
     try {
         getSmtpConfig();
+        getPasswordResetOtpSecret();
     } catch (error) {
         return res.status(503).json({
             success: false,
-            message: error.code === "SMTP_NOT_CONFIGURED"
-                ? "Email delivery is not configured. Add the SMTP settings to the server environment."
-                : error.message
+            message: error.code === "PASSWORD_RESET_SECRET_NOT_CONFIGURED"
+                ? "Password recovery is not configured correctly."
+                : error.code === "SMTP_NOT_CONFIGURED"
+                    ? "Email delivery is not configured. Add the SMTP settings to the server environment."
+                    : "Email delivery is not configured correctly."
         });
     }
 
@@ -66,7 +80,7 @@ const requestPasswordReset = async (req, res) => {
             await sendPasswordResetOtp(email, code);
         } catch (error) {
             await PasswordResetOtp.deleteOne({ _id: request._id });
-            console.error("Password reset email delivery failed:", error.message);
+            logInternalError("Password reset email delivery", error);
             return res.status(502).json({
                 success: false,
                 message: "Could not send the verification email. Check the SMTP configuration and try again."
@@ -75,7 +89,7 @@ const requestPasswordReset = async (req, res) => {
 
         return res.status(200).json({ success: true, message: genericResetRequestMessage });
     } catch (error) {
-        console.error("Password reset request failed:", error.message);
+        logInternalError("Password reset request", error);
         return res.status(500).json({
             success: false,
             message: "Could not start password recovery. Please try again."
@@ -99,6 +113,15 @@ const resetPasswordWithOtp = async (req, res) => {
         return res.status(400).json({
             success: false,
             message: "Password must be at least 6 characters."
+        });
+    }
+
+    try {
+        getPasswordResetOtpSecret();
+    } catch {
+        return res.status(503).json({
+            success: false,
+            message: "Password recovery is not configured correctly."
         });
     }
 
@@ -154,7 +177,7 @@ const resetPasswordWithOtp = async (req, res) => {
             message: "Your password has been reset. You can now log in."
         });
     } catch (error) {
-        console.error("Password reset failed:", error.message);
+        logInternalError("Password reset", error);
         return res.status(500).json({
             success: false,
             message: "Could not reset the password. Please try again."
@@ -225,10 +248,10 @@ const register = async (req, res) => {
         });
 
     } catch (error) {
+        logInternalError("Registration", error);
         res.status(500).json({
             success: false,
-            message: "Registration failed. Please try again.",
-            error: error.message
+            message: "Registration failed. Please try again."
         });
     }
 };
@@ -274,10 +297,10 @@ const login = async (req, res) => {
         });
 
     } catch (error) {
+        logInternalError("Login", error);
         res.status(500).json({
             success: false,
-            message: "Login failed. Please try again.",
-            error: error.message
+            message: "Login failed. Please try again."
         });
     }
 };
@@ -292,10 +315,10 @@ const getMe = async (req, res) => {
             data: serializeUser(req.user)
         });
     } catch (error) {
+        logInternalError("Get profile", error);
         res.status(500).json({
             success: false,
-            message: "Could not retrieve user profile.",
-            error: error.message
+            message: "Could not retrieve user profile."
         });
     }
 };
@@ -364,10 +387,10 @@ const updateMe = async (req, res) => {
             data: serializeUser(user)
         });
     } catch (error) {
+        logInternalError("Update profile", error);
         res.status(500).json({
             success: false,
-            message: "Could not update profile.",
-            error: error.message
+            message: "Could not update profile."
         });
     }
 };
@@ -407,10 +430,10 @@ const changePassword = async (req, res) => {
             message: "Password changed successfully."
         });
     } catch (error) {
+        logInternalError("Change password", error);
         res.status(500).json({
             success: false,
-            message: "Could not change password.",
-            error: error.message
+            message: "Could not change password."
         });
     }
 };

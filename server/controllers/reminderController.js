@@ -1,4 +1,5 @@
 const Reminder = require("../models/Reminder");
+const { logInternalError } = require("../utils/errorLogging");
 
 // GET /api/reminders — get user's reminders
 const getReminders = async (req, res) => {
@@ -12,7 +13,8 @@ const getReminders = async (req, res) => {
             data: reminders
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Get reminders", error);
+        res.status(500).json({ success: false, message: "Could not retrieve reminders." });
     }
 };
 
@@ -44,7 +46,8 @@ const createReminder = async (req, res) => {
             data: reminder
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Create reminder", error);
+        res.status(500).json({ success: false, message: "Could not save the reminder." });
     }
 };
 
@@ -65,7 +68,8 @@ const toggleReminder = async (req, res) => {
             data: reminder
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Update reminder", error);
+        res.status(500).json({ success: false, message: "Could not update the reminder." });
     }
 };
 
@@ -83,7 +87,8 @@ const deleteReminder = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Reminder deleted." });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Delete reminder", error);
+        res.status(500).json({ success: false, message: "Could not delete the reminder." });
     }
 };
 

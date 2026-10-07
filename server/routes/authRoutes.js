@@ -12,6 +12,26 @@ const {
 const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+const registrationLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: {
+        success: false,
+        message: "Too many registration attempts. Wait an hour and try again."
+    }
+});
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: {
+        success: false,
+        message: "Too many login attempts. Wait 15 minutes and try again."
+    }
+});
 const passwordResetLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
@@ -34,8 +54,8 @@ const passwordResetVerifyLimiter = rateLimit({
 });
 
 // Public routes
-router.post("/register", register);   // POST /api/auth/register
-router.post("/login", login);          // POST /api/auth/login
+router.post("/register", registrationLimiter, register);   // POST /api/auth/register
+router.post("/login", loginLimiter, login);                 // POST /api/auth/login
 router.post("/forgot-password/request", passwordResetLimiter, requestPasswordReset);
 router.post("/forgot-password/reset", passwordResetVerifyLimiter, resetPasswordWithOtp);
 

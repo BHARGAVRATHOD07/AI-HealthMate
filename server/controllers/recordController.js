@@ -1,4 +1,5 @@
 const Record = require("../models/Record");
+const { logInternalError } = require("../utils/errorLogging");
 
 // GET /api/records — get user's health records
 const getRecords = async (req, res) => {
@@ -26,7 +27,8 @@ const getRecords = async (req, res) => {
             data: records
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Get health records", error);
+        res.status(500).json({ success: false, message: "Could not retrieve health records." });
     }
 };
 
@@ -66,7 +68,8 @@ const createRecord = async (req, res) => {
             data: record
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Create health record", error);
+        res.status(500).json({ success: false, message: "Could not save the health record." });
     }
 };
 
@@ -84,7 +87,8 @@ const deleteRecord = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Record deleted." });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Delete health record", error);
+        res.status(500).json({ success: false, message: "Could not delete the health record." });
     }
 };
 

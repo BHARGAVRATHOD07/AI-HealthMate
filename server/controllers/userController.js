@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const { logInternalError } = require("../utils/errorLogging");
 
 const getUsers = async (req, res) => {
     res.status(200).json({
@@ -47,10 +48,10 @@ const createUser = async (req, res) => {
             }
         });
     } catch (error) {
+        logInternalError("Create user", error);
         res.status(500).json({
             success: false,
-            message: "Failed to create user",
-            error: error.message
+            message: "Failed to create user."
         });
     }
 };

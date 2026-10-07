@@ -1,4 +1,5 @@
 const Vital = require("../models/Vital");
+const { logInternalError } = require("../utils/errorLogging");
 
 // GET /api/vitals — get user's vitals (with optional type filtering or pagination)
 const getVitals = async (req, res) => {
@@ -17,7 +18,8 @@ const getVitals = async (req, res) => {
             data: vitals
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Get vitals", error);
+        res.status(500).json({ success: false, message: "Could not retrieve vital readings." });
     }
 };
 
@@ -56,7 +58,8 @@ const createVital = async (req, res) => {
             data: vital
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Create vital", error);
+        res.status(500).json({ success: false, message: "Could not save the vital reading." });
     }
 };
 
@@ -74,7 +77,8 @@ const deleteVital = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Vital reading deleted." });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Delete vital", error);
+        res.status(500).json({ success: false, message: "Could not delete the vital reading." });
     }
 };
 

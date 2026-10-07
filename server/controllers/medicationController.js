@@ -1,4 +1,5 @@
 const Medication = require("../models/Medication");
+const { logInternalError } = require("../utils/errorLogging");
 
 const serializeMedication = (medication) => medication.toObject();
 
@@ -14,7 +15,8 @@ const getMedications = async (req, res) => {
             data: medications
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Get medications", error);
+        res.status(500).json({ success: false, message: "Could not retrieve medications." });
     }
 };
 
@@ -48,16 +50,43 @@ const createMedication = async (req, res) => {
             data: medication
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Create medication", error);
+        res.status(500).json({ success: false, message: "Could not save the medication." });
     }
 };
 
 // PUT /api/medications/:id — update medication or refill count
 const updateMedication = async (req, res) => {
     try {
+        const allowedFields = [
+            "name",
+            "dosage",
+            "frequency",
+            "timing",
+            "prescribedBy",
+            "refillsLeft",
+            "totalRefills",
+            "instructions",
+            "status",
+            "startDate",
+            "endDate"
+        ];
+        const updates = Object.fromEntries(
+            allowedFields
+                .filter((field) => Object.prototype.hasOwnProperty.call(req.body, field))
+                .map((field) => [field, req.body[field]])
+        );
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "At least one medication field must be provided."
+            });
+        }
+
         const medication = await Medication.findOneAndUpdate(
             { _id: req.params.id, user: req.user._id },
-            req.body,
+            { $set: updates },
             { new: true, runValidators: true }
         );
 
@@ -70,7 +99,8 @@ const updateMedication = async (req, res) => {
             data: medication
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Update medication", error);
+        res.status(500).json({ success: false, message: "Could not update the medication." });
     }
 };
 
@@ -101,7 +131,8 @@ const setMedicationTaken = async (req, res) => {
             data: serializeMedication(medication)
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Update medication dose", error);
+        res.status(500).json({ success: false, message: "Could not update medication status." });
     }
 };
 
@@ -119,7 +150,8 @@ const deleteMedication = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Medication deleted." });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        logInternalError("Delete medication", error);
+        res.status(500).json({ success: false, message: "Could not delete the medication." });
     }
 };
 

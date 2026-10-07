@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { logInternalError } = require("../utils/errorLogging");
 
 // ─── System Prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are AI HealthMate, a friendly and knowledgeable health information assistant integrated into a patient health management dashboard.
@@ -103,7 +104,7 @@ const chat = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Gemini AI Error:", error.message);
+        logInternalError("Gemini AI request", error);
 
         if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("API key")) {
             return res.status(401).json({
@@ -128,8 +129,7 @@ const chat = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "AI service temporarily unavailable. Please try again.",
-            error: error.message
+            message: "AI service temporarily unavailable. Please try again."
         });
     }
 };

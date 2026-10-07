@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
 process.env.JWT_SECRET = "test-password-reset-secret";
+process.env.PASSWORD_RESET_OTP_SECRET = "test-password-reset-otp-secret-32-bytes-minimum";
 process.env.SMTP_HOST = "smtp.example.test";
 process.env.SMTP_PORT = "587";
 process.env.SMTP_USER = "test@example.test";
@@ -90,7 +91,7 @@ test("email password recovery sends, limits, verifies, and consumes a one-time c
             assert.ok(match, "email should contain a six-digit code");
             const code = match[1];
             const expectedHash = crypto
-                .createHmac("sha256", process.env.JWT_SECRET)
+                .createHmac("sha256", process.env.PASSWORD_RESET_OTP_SECRET)
                 .update(`person@example.test:${code}`)
                 .digest("hex");
             assert.equal(otpRecord.codeHash, expectedHash);
