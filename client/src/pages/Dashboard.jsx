@@ -1,14 +1,17 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Activity,
-  Pill,
-  Bell,
-  FileText,
-  Bot,
   ArrowRight,
+  Bell,
+  Bot,
+  Calendar,
+  Clock3,
+  FileText,
+  Pill,
   Plus,
-  Sparkles
+  RefreshCw,
+  UserRound
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -16,11 +19,7 @@ import Card from "../components/common/Card";
 import Button from "../components/common/Button";
 import HealthCard from "../components/cards/HealthCard";
 import ReminderCard from "../components/cards/ReminderCard";
-import RecordCard from "../components/cards/RecordCard";
 import EmptyState from "../components/common/EmptyState";
-import Modal from "../components/common/Modal";
-import LoadingSpinner from "../components/common/LoadingSpinner";
-
 import {
   getVitals,
   getMedications,
@@ -29,488 +28,411 @@ import {
   toggleReminder
 } from "../api/api";
 
+const EMPTY_RESOURCE = { status: "loading", data: [] };
+
+const formatDate = (value, options = { year: "numeric", month: "short", day: "numeric" }) => {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString(undefined, options);
+};
+
+const formatUpdateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const isToday = date.toDateString() === new Date().toDateString();
+  const formattedTime = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return isToday
+    ? `today at ${formattedTime}`
+    : date.toLocaleDateString();
+};
+
+const getLatestVital = (vitals, type) =>
+  vitals
+    .filter((vital) => vital.type === type)
+    .sort((a, b) =>
+      new Date(b.loggedAt || b.createdAt || 0).getTime()
+      - new Date(a.loggedAt || a.createdAt || 0).getTime()
+    )[0];
+
+const getReminderSortDate = (reminder) => {
+  if (!reminder.date || reminder.date.toLowerCase() === "today") return 0;
+  if (reminder.date.toLowerCase() === "tomorrow") {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow.getTime();
+  }
+  const parsed = new Date(reminder.date);
+  return Number.isNaN(parsed.getTime()) ? Number.MAX_SAFE_INTEGER : parsed.getTime();
+};
+
+const getReminderTime = (reminder) => {
+  const match = typeof reminder.time === "string"
+    ? reminder.time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+    : null;
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  let hours = Number(match[1]) % 12;
+  if (match[3].toUpperCase() === "PM") hours += 12;
+  return hours * 60 + Number(match[2]);
+};
+
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-
-  const [vitals, setVitals] = useState([]);
-  const [medications, setMedications] = useState([]);
-  const [reminders, setReminders] = useState([]);
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [dashboardData, setDashboardData] = useState({
+    vitals: EMPTY_RESOURCE,
+    medications: EMPTY_RESOURCE,
+    reminders: EMPTY_RESOURCE,
+    records: EMPTY_RESOURCE
+  });
+  const [togglingReminderIds, setTogglingReminderIds] = useState([]);
+  const [reminderActionError, setReminderActionError] = useState("");
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const [vitalsRes, medsRes, remsRes, recsRes] = await Promise.allSettled([
-          getVitals(),
-          getMedications(),
-          getReminders(),
-          getRecords()
-        ]);
+    let cancelled = false;
+    const loadDashboardData = async () => {
+      const results = await Promise.allSettled([
+        getVitals(),
+        getMedications(),
+        getReminders(),
+        getRecords()
+      ]);
+      if (cancelled) return;
 
-        if (vitalsRes.status === "fulfilled" && vitalsRes.value.success) {
-          setVitals(vitalsRes.value.data);
-        }
-        if (medsRes.status === "fulfilled" && medsRes.value.success) {
-          setMedications(medsRes.value.data);
-        }
-        if (remsRes.status === "fulfilled" && remsRes.value.success) {
-          setReminders(remsRes.value.data);
-        }
-        if (recsRes.status === "fulfilled" && recsRes.value.success) {
-          setRecords(recsRes.value.data);
-        }
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
-      } finally {
-        setLoading(false);
-      }
+      const resourceNames = ["vitals", "medications", "reminders", "records"];
+      const nextData = {};
+      results.forEach((result, index) => {
+        const name = resourceNames[index];
+        const isValidResponse = result.status === "fulfilled"
+          && result.value?.success
+          && Array.isArray(result.value.data);
+        nextData[name] = isValidResponse
+          ? { status: "success", data: result.value.data }
+          : { status: "error", data: [] };
+      });
+      setDashboardData(nextData);
     };
+    loadDashboardData();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
 
-    fetchDashboardData();
-  }, []);
+  const vitals = dashboardData.vitals.data;
+  const medications = dashboardData.medications.data;
+  const reminders = dashboardData.reminders.data;
+  const records = dashboardData.records.data;
 
-  const handleToggleReminder = async (id) => {
+  const activeMedications = useMemo(
+    () => medications.filter((medication) => medication.status === "Active"),
+    [medications]
+  );
+
+  const upcomingReminders = useMemo(
+    () => reminders
+      .filter((reminder) => !reminder.completed)
+      .sort((a, b) => {
+        const dateDifference = getReminderSortDate(a) - getReminderSortDate(b);
+        return dateDifference || getReminderTime(a) - getReminderTime(b);
+      })
+      .slice(0, 4),
+    [reminders]
+  );
+
+  const recentRecords = useMemo(
+    () => [...records]
+      .sort((a, b) =>
+        new Date(b.date || b.createdAt || 0).getTime()
+        - new Date(a.date || a.createdAt || 0).getTime()
+      )
+      .slice(0, 4),
+    [records]
+  );
+
+  const latestMetrics = useMemo(() => {
+    const definitions = [
+      { id: "weight", type: "Weight", name: "Weight", icon: "Scale" },
+      { id: "heart-rate", type: "Heart Rate", name: "Heart Rate", icon: "Activity" },
+      { id: "blood-pressure", type: "Blood Pressure", name: "Blood Pressure", icon: "Heart" },
+      { id: "oxygen", type: "Oxygen Level", name: "SpO2", icon: "Wind" },
+      { id: "blood-sugar", type: "Blood Sugar", name: "Blood Sugar", icon: "Droplet" },
+      { id: "temperature", type: "Temperature", name: "Temperature", icon: "Thermometer" }
+    ];
+
+    return definitions.map((definition) => {
+      const vital = getLatestVital(vitals, definition.type);
+      return {
+        ...definition,
+        value: vital?.value || "",
+        unit: vital?.unit || "",
+        status: dashboardData.vitals.status === "error"
+          ? "Unable to load"
+          : vital?.status || "No data available",
+        lastUpdated: formatUpdateTime(vital?.loggedAt || vital?.createdAt)
+      };
+    });
+  }, [dashboardData.vitals.status, vitals]);
+
+  const handleToggleReminder = useCallback(async (id) => {
+    const reminder = reminders.find((item) => (item._id || item.id) === id);
+    if (!reminder || togglingReminderIds.includes(id)) return;
+
+    setReminderActionError("");
+    setTogglingReminderIds((current) => [...current, id]);
+    setDashboardData((current) => ({
+      ...current,
+      reminders: {
+        ...current.reminders,
+        data: current.reminders.data.map((item) =>
+          (item._id || item.id) === id ? { ...item, completed: !item.completed } : item
+        )
+      }
+    }));
     try {
-      // Optimistic update
-      setReminders((prev) =>
-        prev.map((rem) => (rem._id === id || rem.id === id ? { ...rem, completed: !rem.completed } : rem))
-      );
       await toggleReminder(id);
-    } catch (err) {
-      console.error("Failed to toggle reminder:", err);
+    } catch {
+      setDashboardData((current) => ({
+        ...current,
+        reminders: {
+          ...current.reminders,
+          data: current.reminders.data.map((item) =>
+            (item._id || item.id) === id ? { ...item, completed: reminder.completed } : item
+          )
+        }
+      }));
+      setReminderActionError("Could not update that reminder. Please try again.");
+    } finally {
+      setTogglingReminderIds((current) => current.filter((itemId) => itemId !== id));
     }
+  }, [reminders, togglingReminderIds]);
+
+  const retryDashboardData = () => {
+    setDashboardData((current) => Object.fromEntries(
+      Object.entries(current).map(([name, resource]) => [
+        name,
+        resource.status === "error" ? { ...resource, status: "loading" } : resource
+      ])
+    ));
+    setRefreshKey((current) => current + 1);
   };
 
-  const activeMedicationsCount = (Array.isArray(medications) ? medications : []).filter((m) => m.status === "Active").length;
-  const pendingRemindersCount = (Array.isArray(reminders) ? reminders : []).filter((r) => !r.completed).length;
-
-  const safeVitals = Array.isArray(vitals) ? vitals : [];
-  const safeRecords = Array.isArray(records) ? records : [];
-  const safeReminders = Array.isArray(reminders) ? reminders : [];
-
-  const getLatestVital = (type) =>
-    safeVitals
-      .filter((vital) => vital.type === type)
-      .sort(
-        (a, b) =>
-          new Date(b.loggedAt || b.createdAt || 0).getTime() -
-          new Date(a.loggedAt || a.createdAt || 0).getTime()
-      )[0];
-
-  const vitalMetrics = [
-    {
-      id: "bp",
-      name: "Blood Pressure",
-      value: getLatestVital("Blood Pressure")?.value,
-      unit: "mmHg",
-      status: getLatestVital("Blood Pressure")?.status || "Not logged",
-      lastUpdated: getLatestVital("Blood Pressure")?.loggedAt
-        ? new Date(getLatestVital("Blood Pressure").loggedAt).toLocaleDateString()
-        : null
-    },
-    {
-      id: "hr",
-      name: "Heart Rate",
-      value: getLatestVital("Heart Rate")?.value,
-      unit: "bpm",
-      status: getLatestVital("Heart Rate")?.status || "Not logged",
-      lastUpdated: getLatestVital("Heart Rate")?.loggedAt
-        ? new Date(getLatestVital("Heart Rate").loggedAt).toLocaleDateString()
-        : null
-    },
-    {
-      id: "sugar",
-      name: "Blood Sugar",
-      value: getLatestVital("Blood Sugar")?.value,
-      unit: "mg/dL",
-      status: getLatestVital("Blood Sugar")?.status || "Not logged",
-      lastUpdated: getLatestVital("Blood Sugar")?.loggedAt
-        ? new Date(getLatestVital("Blood Sugar").loggedAt).toLocaleDateString()
-        : null
-    },
-    {
-      id: "weight",
-      name: "Weight",
-      value: getLatestVital("Weight")?.value,
-      unit: "kg",
-      status: getLatestVital("Weight")?.status || "Not logged",
-      lastUpdated: getLatestVital("Weight")?.loggedAt
-        ? new Date(getLatestVital("Weight").loggedAt).toLocaleDateString()
-        : null
-    }
+  const name = user?.name?.trim();
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? "Good morning" : greetingHour < 18 ? "Good afternoon" : "Good evening";
+  const healthProfile = user?.healthProfile || {};
+  const profileSummary = [
+    { label: "Height", value: healthProfile.height || "Not added" },
+    { label: "Weight", value: healthProfile.weight || "Not added" },
+    { label: "Blood group", value: healthProfile.bloodGroup || "Not added" }
   ];
+
+  const sectionError = (resourceName, label) => dashboardData[resourceName].status === "error" && (
+    <div role="alert" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.85rem 1rem", borderRadius: "0.75rem", background: "var(--bg-card-alt)", color: "var(--text-muted)", fontSize: "0.875rem" }}>
+      Unable to load {label}.
+      <Button variant="outline" size="sm" icon={RefreshCw} onClick={retryDashboardData}>Retry</Button>
+    </div>
+  );
+
+  const vitalCard = (metric) => (
+    <HealthCard
+      key={metric.id}
+      metric={metric}
+      onClick={() => navigate("/monitoring")}
+    />
+  );
 
   return (
     <DashboardLayout>
-      {/* Welcome Banner */}
-      <div
+      <section
+        aria-labelledby="dashboard-heading"
         style={{
-          backgroundColor: "var(--bg-card)",
-          borderRadius: "1.45rem",
+          background: "radial-gradient(circle at top left, rgba(22, 163, 74, 0.12), transparent 32%), linear-gradient(135deg, rgba(22, 163, 74, 0.07), rgba(5, 150, 105, 0.06))",
           border: "1px solid rgba(22, 163, 74, 0.18)",
-          padding: "1.5rem 1.75rem",
+          borderRadius: "1.4rem",
+          padding: "1.5rem",
           marginBottom: "1.5rem",
-          boxShadow: "var(--shadow-md)",
+          boxShadow: "var(--shadow-sm)",
           display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
           justifyContent: "space-between",
-          gap: "1.25rem",
-          background: "radial-gradient(circle at top left, rgba(22, 163, 74, 0.12), transparent 25%), linear-gradient(135deg, rgba(22, 163, 74, 0.08) 0%, rgba(5, 150, 105, 0.08) 100%)"
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem"
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "#16A34A", fontWeight: "700", marginBottom: "0.35rem" }}>
-            <div style={{ width: "24px", height: "24px", borderRadius: "0.6rem", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(22, 163, 74, 0.1)" }}>
-              <Sparkles size={14} />
-            </div>
-            Daily Health Summary
-          </div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: "800", color: "var(--text-main)", margin: 0, letterSpacing: "-0.03em" }}>
-            Good Day, {user?.name || "Patient"}
+          <p style={{ margin: "0 0 0.35rem", color: "#15803D", fontSize: "0.85rem", fontWeight: 700 }}>
+            Your health overview
+          </p>
+          <h1 id="dashboard-heading" style={{ margin: 0, color: "var(--text-main)", fontSize: "clamp(1.4rem, 4vw, 1.9rem)", fontWeight: 800, letterSpacing: "-0.03em" }}>
+            {greeting}{name ? `, ${name}` : ""} 👋
           </h1>
-          <p style={{ fontSize: "0.9375rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
-            Here's your personal health overview and schedule for today.
+          <p style={{ margin: "0.4rem 0 0", color: "var(--text-muted)", fontSize: "0.9375rem" }}>
+            A quick look at your latest health information.
           </p>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <Button variant="outline" size="md" icon={Plus} onClick={() => navigate("/monitoring")}>
-            Log Vitals
-          </Button>
-          <Button variant="primary" size="md" icon={Bot} onClick={() => navigate("/assistant")}>
-            Ask AI Assistant
-          </Button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem" }}>
+          <Button variant="outline" size="md" icon={UserRound} onClick={() => navigate("/profile")}>View Profile</Button>
+          <Button variant="primary" size="md" icon={Plus} onClick={() => navigate("/monitoring")}>Add Health Reading</Button>
         </div>
+      </section>
+
+      <div className="dashboard-overview-grid" style={{ gap: "1.25rem", marginBottom: "1.5rem" }}>
+        <Card title="Profile Summary" subtitle="Your saved personal health details" icon={UserRound}
+          headerAction={<Button variant="ghost" size="sm" onClick={() => navigate("/profile")}>View Profile <ArrowRight size={14} /></Button>}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", alignItems: "center" }}>
+            <div aria-hidden="true" style={{ width: "3.4rem", height: "3.4rem", display: "grid", placeItems: "center", flexShrink: 0, borderRadius: "50%", background: "linear-gradient(135deg, #DCFCE7, #A7F3D0)", color: "#166534", fontWeight: 800, fontSize: "1.1rem" }}>
+              {name ? name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") : "?"}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: "var(--text-main)", fontWeight: 750, fontSize: "1.05rem", overflowWrap: "anywhere" }}>{name || "Name not available"}</div>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.875rem", overflowWrap: "anywhere" }}>{user?.email || "Account email not available"}</div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.8rem", marginTop: "1.25rem" }}>
+            {profileSummary.map((item) => (
+              <div key={item.label} style={{ minWidth: 0, padding: "0.8rem", borderRadius: "0.75rem", background: "var(--bg-card-alt)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>{item.label}</div>
+                <div style={{ color: "var(--text-main)", fontWeight: 700, fontSize: "0.92rem", marginTop: "0.15rem", overflowWrap: "anywhere" }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Quick Links" subtitle="Shortcuts to your health tools" icon={Activity}>
+          <div style={{ display: "grid", gap: "0.65rem" }}>
+            {[
+              { label: "Log a health reading", route: "/monitoring", icon: Plus },
+              { label: "Manage medications", route: "/medications", icon: Pill },
+              { label: "View reminders", route: "/reminders", icon: Bell },
+              { label: "View health records", route: "/records", icon: FileText },
+              { label: "Open AI Assistant", route: "/assistant", icon: Bot }
+            ].map(({ label, route, icon: Icon }) => (
+              <button
+                key={route}
+                type="button"
+                onClick={() => navigate(route)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", width: "100%", padding: "0.7rem 0.8rem", borderRadius: "0.7rem", border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-main)", font: "inherit", fontSize: "0.86rem", fontWeight: 650, textAlign: "left", cursor: "pointer" }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}><Icon size={17} color="#16A34A" />{label}</span>
+                <ArrowRight size={15} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </Card>
       </div>
 
-      {loading ? (
-        <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}>
-          <LoadingSpinner size="lg" text="Loading health overview..." />
-        </div>
-      ) : (
-        <>
-          {/* 4 Health Summary Top Cards */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-              gap: "1rem",
-              marginBottom: "1.5rem"
-            }}
-          >
-            {/* Vitals Count */}
-            <Card padding="1.1rem">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Vitals Logged</div>
-                  <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#10b981", margin: "0.15rem 0" }}>
-                    {safeVitals.length}
-                  </div>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600" }}>Measurements recorded</span>
-                </div>
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "0.75rem",
-                    backgroundColor: "rgba(16, 185, 129, 0.12)",
-                    color: "#10b981",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  <Activity size={22} />
-                </div>
-              </div>
-            </Card>
-
-            {/* Active Medications */}
-            <Card padding="1.1rem">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Active Medications</div>
-                  <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#16A34A", margin: "0.15rem 0" }}>
-                    {activeMedicationsCount}
-                  </div>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Prescriptions active</span>
-                </div>
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "0.75rem",
-                    backgroundColor: "rgba(22, 163, 74, 0.12)",
-                    color: "#16A34A",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  <Pill size={22} />
-                </div>
-              </div>
-            </Card>
-
-            {/* Pending Reminders */}
-            <Card padding="1.1rem">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Pending Reminders</div>
-                  <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#f59e0b", margin: "0.15rem 0" }}>
-                    {pendingRemindersCount}
-                  </div>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Tasks pending</span>
-                </div>
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "0.75rem",
-                    backgroundColor: "rgba(245, 158, 11, 0.12)",
-                    color: "#f59e0b",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  <Bell size={22} />
-                </div>
-              </div>
-            </Card>
-
-            {/* Total Health Records */}
-            <Card padding="1.1rem">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Stored Health Records</div>
-                  <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#6366f1", margin: "0.15rem 0" }}>
-                    {records.length}
-                  </div>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Documents archived</span>
-                </div>
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "0.75rem",
-                    backgroundColor: "rgba(99, 102, 241, 0.12)",
-                    color: "#6366f1",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  <FileText size={22} />
-                </div>
-              </div>
-            </Card>
+      <section aria-labelledby="health-overview-heading" style={{ marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "0.9rem" }}>
+          <div>
+            <h2 id="health-overview-heading" style={{ margin: 0, color: "var(--text-main)", fontSize: "1.15rem", fontWeight: 750 }}>Health Overview</h2>
+            <p style={{ margin: "0.2rem 0 0", color: "var(--text-muted)", fontSize: "0.82rem" }}>Latest recorded readings</p>
           </div>
-
-          {/* Main Grid: Health Vitals + Right Column */}
-          <div style={{ gridTemplateColumns: "minmax(0, 1fr)", gap: "1.5rem" }} className="dashboard-overview-grid">
-            {/* Left Column (2 Spans): Vitals Overview + Recent Records */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", minWidth: 0 }}>
-              {/* Health Vitals Grid */}
-              <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-                  <h2 style={{ fontSize: "1.15rem", fontWeight: "700", color: "var(--text-main)", margin: 0 }}>
-                    Health Vitals & Measurements
-                  </h2>
-                  <button
-                    onClick={() => navigate("/monitoring")}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#16A34A",
-                      fontSize: "0.85rem",
-                      fontWeight: "700",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.25rem"
-                    }}
-                  >
-                    View Analytics <ArrowRight size={15} />
-                  </button>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.1rem" }}>
-                  {vitalMetrics.map((metric) => (
-                    <HealthCard
-                      key={metric.id}
-                      metric={metric}
-                      onClick={() => navigate("/monitoring")}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Recent Health Records */}
-              <Card
-                title="Recent Health Records"
-                subtitle="Uploaded medical reports and lab results"
-                icon={FileText}
-                headerAction={
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/records")}>
-                    View All
-                  </Button>
-                }
-              >
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
-                  {safeRecords.length ? safeRecords.slice(0, 2).map((rec) => (
-                    <RecordCard
-                      key={rec._id || rec.id}
-                      record={{
-                        ...rec,
-                        id: rec._id || rec.id,
-                        doctor: rec.doctorName || rec.doctor,
-                        date: rec.date ? new Date(rec.date).toLocaleDateString() : "Recent",
-                        fileType: rec.category,
-                        fileSize: "1.2 MB",
-                        description: rec.summary
-                      }}
-                      onView={(r) => setSelectedRecord(r)}
-                    />
-                  )) : (
-                    <EmptyState
-                      icon={FileText}
-                      title="No health records yet"
-                      description="Add your first record to keep reports and notes together."
-                      actionLabel="Add a record"
-                      onAction={() => navigate("/records")}
-                    />
-                  )}
-                </div>
-              </Card>
+          <Button variant="ghost" size="sm" onClick={() => navigate("/monitoring")}>All readings <ArrowRight size={14} /></Button>
+        </div>
+        {sectionError("vitals", "vital readings")}
+        {dashboardData.vitals.status === "loading" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "1rem" }}>
+            {["Weight", "Heart Rate", "Blood Pressure", "SpO2"].map((label) => (
+              <Card key={label} padding="1.1rem"><div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{label}</div><div role="status" style={{ marginTop: "0.65rem", color: "var(--text-muted)" }}>Loading...</div></Card>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "1rem" }}>
+              {latestMetrics.slice(0, 4).map(vitalCard)}
             </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
+              {latestMetrics.slice(4).map(vitalCard)}
+            </div>
+          </>
+        )}
+      </section>
 
-            {/* Right Column (1 Span): Reminders + AI Prominent Card */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-              {/* AI Assistant Callout Banner Card */}
-              <div
-                style={{
-                  backgroundColor: "var(--bg-card)",
-                  borderRadius: "1.25rem",
-                  border: "1px solid rgba(22, 163, 74, 0.3)",
-                  padding: "1.5rem",
-                  boxShadow: "var(--shadow-md)",
-                  background: "linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)",
-                  position: "relative",
-                  overflow: "hidden"
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
-                  <div
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "0.75rem",
-                      backgroundColor: "#16A34A",
-                      color: "#ffffff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 4px 10px rgba(22, 163, 74, 0.3)"
-                    }}
-                  >
-                    <Bot size={24} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: "800", color: "var(--text-main)", margin: 0 }}>
-                      Need Help Understanding Your Health?
-                    </h3>
-                    <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: "700" }}>
-                      AI HealthMate Assistant
-                    </span>
+      <div className="dashboard-overview-grid" style={{ gap: "1.25rem", marginBottom: "1.5rem" }}>
+        <Card title="Current Medications" subtitle="Your active medications" icon={Pill}
+          headerAction={<Button variant="ghost" size="sm" onClick={() => navigate("/medications")}>View all <ArrowRight size={14} /></Button>}
+        >
+          {dashboardData.medications.status === "loading" ? (
+            <div role="status" style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading medications...</div>
+          ) : dashboardData.medications.status === "error" ? sectionError("medications", "medications") : activeMedications.length ? (
+            <div style={{ display: "grid", gap: "0.7rem" }}>
+              {activeMedications.slice(0, 4).map((medication) => (
+                <div key={medication._id || medication.id} style={{ display: "flex", alignItems: "flex-start", gap: "0.7rem", padding: "0.75rem", border: "1px solid var(--border-color)", borderRadius: "0.75rem", minWidth: 0 }}>
+                  <div aria-hidden="true" style={{ width: "2rem", height: "2rem", flexShrink: 0, borderRadius: "0.6rem", display: "grid", placeItems: "center", color: "#15803D", background: "#DCFCE7" }}><Pill size={16} /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: "var(--text-main)", fontWeight: 700, overflowWrap: "anywhere" }}>{medication.name}</div>
+                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", overflowWrap: "anywhere" }}>
+                      {[medication.dosage, medication.frequency, medication.timing].filter(Boolean).join(" · ") || "Schedule not added"}
+                    </div>
                   </div>
                 </div>
+              ))}
+              {activeMedications.length > 4 && <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>And {activeMedications.length - 4} more active medications</div>}
+            </div>
+          ) : (
+            <EmptyState icon={Pill} title="No active medications." description="Active prescriptions will appear here." actionLabel="View Medications" onAction={() => navigate("/medications")} />
+          )}
+        </Card>
 
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.5, marginBottom: "1.25rem" }}>
-                  Ask questions about your medication timings, blood pressure readings, or receive clear breakdowns of medical terminology.
-                </p>
-
-                <Button
-                  variant="primary"
-                  size="md"
-                  fullWidth
-                  icon={Bot}
-                  onClick={() => navigate("/assistant")}
-                >
-                  Ask AI Assistant
-                </Button>
-              </div>
-
-              {/* Today's Schedule Reminders */}
-              <Card
-                title="Schedule Reminders"
-                subtitle="Scheduled health tasks"
-                icon={Bell}
-                headerAction={
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/reminders")}>
-                    Manage
-                  </Button>
-                }
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {safeReminders.length ? safeReminders.slice(0, 4).map((reminder) => (
+        <Card title="Today's & Upcoming Reminders" subtitle="Pending scheduled health tasks" icon={Bell}
+          headerAction={<Button variant="ghost" size="sm" onClick={() => navigate("/reminders")}>View all <ArrowRight size={14} /></Button>}
+        >
+          {dashboardData.reminders.status === "loading" ? (
+            <div role="status" style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading reminders...</div>
+          ) : dashboardData.reminders.status === "error" ? sectionError("reminders", "reminders") : upcomingReminders.length ? (
+            <div style={{ display: "grid", gap: "0.65rem" }}>
+              {reminderActionError && <div role="alert" style={{ color: "#B91C1C", fontSize: "0.82rem" }}>{reminderActionError}</div>}
+              {upcomingReminders.map((reminder) => {
+                const id = reminder._id || reminder.id;
+                return (
+                  <div key={id}>
                     <ReminderCard
-                      key={reminder._id || reminder.id}
-                      reminder={{
-                        ...reminder,
-                        id: reminder._id || reminder.id
-                      }}
+                      reminder={{ ...reminder, id }}
                       onToggleComplete={handleToggleReminder}
                     />
-                  )) : (
-                    <EmptyState
-                      icon={Bell}
-                      title="No reminders scheduled"
-                      description="Create a reminder for medication, appointments, or health checks."
-                      actionLabel="Manage reminders"
-                      onAction={() => navigate("/reminders")}
-                    />
-                  )}
+                    {reminder.date && reminder.date !== "Today" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", margin: "0.3rem 0 0 3.2rem", color: "var(--text-muted)", fontSize: "0.75rem" }}>
+                        <Calendar size={12} />{formatDate(reminder.date) || reminder.date}
+                      </div>
+                    )}
+                    {togglingReminderIds.includes(id) && <span role="status" style={{ display: "block", marginLeft: "3.2rem", color: "var(--text-muted)", fontSize: "0.72rem" }}>Updating...</span>}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState icon={Clock3} title="No reminders for today." description="Pending reminders will appear here." actionLabel="View Reminders" onAction={() => navigate("/reminders")} />
+          )}
+        </Card>
+      </div>
+
+      <Card title="Recent Health Records" subtitle="Your latest saved health records" icon={FileText}
+        headerAction={<Button variant="ghost" size="sm" onClick={() => navigate("/records")}>View all records <ArrowRight size={14} /></Button>}
+      >
+        {dashboardData.records.status === "loading" ? (
+          <div role="status" style={{ color: "var(--text-muted)", padding: "0.5rem 0" }}>Loading health records...</div>
+        ) : dashboardData.records.status === "error" ? sectionError("records", "health records") : recentRecords.length ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
+            {recentRecords.map((record) => (
+              <div key={record._id || record.id} style={{ display: "flex", alignItems: "flex-start", gap: "0.7rem", padding: "0.85rem", border: "1px solid var(--border-color)", borderRadius: "0.75rem", minWidth: 0 }}>
+                <div aria-hidden="true" style={{ width: "2rem", height: "2rem", flexShrink: 0, borderRadius: "0.6rem", display: "grid", placeItems: "center", color: "#047857", background: "#D1FAE5" }}><FileText size={16} /></div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: "var(--text-main)", fontWeight: 700, overflowWrap: "anywhere" }}>{record.title}</div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>{record.category || "Health record"}</div>
+                  {record.date && <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.25rem", color: "var(--text-subtle)", fontSize: "0.75rem" }}><Calendar size={12} />{formatDate(record.date)}</div>}
                 </div>
-              </Card>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Record View Modal */}
-      {selectedRecord && (
-        <Modal
-          isOpen={!!selectedRecord}
-          onClose={() => setSelectedRecord(null)}
-          title={selectedRecord.title}
-          subtitle={`Category: ${selectedRecord.category || selectedRecord.fileType} • Date: ${selectedRecord.date}`}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div>
-              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Physician / Facility</div>
-              <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)", marginTop: "0.15rem" }}>
-                {selectedRecord.doctorName || selectedRecord.doctor || "General Medical Record"} ({selectedRecord.facility || "Central Lab"})
               </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Clinical Notes / Summary</div>
-              <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginTop: "0.25rem", lineHeight: 1.5 }}>
-                {selectedRecord.summary || selectedRecord.description}
-              </p>
-            </div>
+            ))}
           </div>
-        </Modal>
-      )}
-
-      <style>{`
-      `}</style>
+        ) : (
+          <EmptyState icon={FileText} title="No health records yet." description="Your saved health records will appear here." actionLabel="View Health Records" onAction={() => navigate("/records")} />
+        )}
+      </Card>
     </DashboardLayout>
   );
 };
