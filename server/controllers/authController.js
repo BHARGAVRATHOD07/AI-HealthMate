@@ -203,6 +203,85 @@ const serializeUser = (user) => ({
     healthProfile: user.healthProfile
 });
 
+const allowedProfileFields = [
+    "dateOfBirth", "gender", "phone", "address", "height", "weight",
+    "bloodGroup", "allergies", "existingConditions", "emergencyName",
+    "emergencyRelation", "emergencyPhone"
+];
+const allowedGenders = new Set(["", "Male", "Female", "Other", "Prefer not to say"]);
+const allowedBloodGroups = new Set(["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]);
+
+const validatePhone = (value) => {
+    if (!value) return true;
+    if (!/^\+?[\d\s().-]+$/.test(value)) return false;
+    const digits = value.replace(/\D/g, "");
+    return digits.length >= 7 && digits.length <= 15;
+};
+
+const validateMeasurement = (value, kind) => {
+    if (!value) return true;
+    const pattern = kind === "height"
+        ? /^(\d{1,3}(?:\.\d{1,2})?)\s*(cm|m|in|ft)?$/i
+        : /^(\d{1,3}(?:\.\d{1,2})?)\s*(kg|lbs?)?$/i;
+    const match = value.match(pattern);
+    if (!match) return false;
+
+    const amount = Number(match[1]);
+    const unit = (match[2] || (kind === "height" ? "cm" : "kg")).toLowerCase();
+    if (kind === "height") {
+        const centimeters = amount * ({ cm: 1, m: 100, in: 2.54, ft: 30.48 }[unit]);
+        return centimeters >= 30 && centimeters <= 300;
+    }
+
+    const kilograms = amount * (unit === "lb" || unit === "lbs" ? 0.45359237 : 1);
+    return kilograms >= 1 && kilograms <= 700;
+};
+
+const validateDateOfBirth = (value) => {
+    if (!value) return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return !Number.isNaN(date.getTime())
+        && date.toISOString().slice(0, 10) === value
+        && value <= today;
+};
+
+const validateProfileField = (field, value) => {
+    if (field === "dateOfBirth" && !validateDateOfBirth(value)) {
+        return "Date of birth must be a valid date that is not in the future.";
+    }
+    if (field === "gender" && !allowedGenders.has(value)) {
+        return "Select a supported gender option.";
+    }
+    if (field === "bloodGroup" && !allowedBloodGroups.has(value)) {
+        return "Select a supported blood group.";
+    }
+    if ((field === "phone" || field === "emergencyPhone") && !validatePhone(value)) {
+        return "Enter a valid phone number with 7 to 15 digits.";
+    }
+    if (field === "height" && !validateMeasurement(value, field)) {
+        return "Enter a valid height between 30 and 300 cm (or equivalent).";
+    }
+    if (field === "weight" && !validateMeasurement(value, field)) {
+        return "Enter a valid weight between 1 and 700 kg (or equivalent).";
+    }
+    if (field === "emergencyName" && value.length > 100) {
+        return "Emergency contact name must be 100 characters or fewer.";
+    }
+    if (field === "emergencyRelation" && value.length > 80) {
+        return "Relationship must be 80 characters or fewer.";
+    }
+    if (field === "address" && value.length > 300) {
+        return "Address must be 300 characters or fewer.";
+    }
+    if ((field === "allergies" || field === "existingConditions") && value.length > 1000) {
+        return "Health notes must be 1000 characters or fewer.";
+    }
+    return null;
+};
+
 // ─── POST /api/auth/register ───────────────────────────────────────────────────
 const register = async (req, res) => {
     try {
@@ -326,33 +405,39 @@ const getMe = async (req, res) => {
 const updateMe = async (req, res) => {
     try {
         const body = req.body || {};
-        const name = typeof body.name === "string" ? body.name.trim() : "";
-        const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-
-        if (!name || !email || !/^\S+@\S+\.\S+$/.test(email)) {
+        const allowedTopLevelFields = new Set(["name", "email", "healthProfile"]);
+        if (Object.keys(body).some((field) => !allowedTopLevelFields.has(field))) {
             return res.status(400).json({
                 success: false,
-                message: "A valid name and email are required."
+                message: "The request contains unsupported profile fields."
             });
         }
 
-        const existingUser = await User.findOne({
-            email,
-            _id: { $ne: req.user._id }
-        });
-        if (existingUser) {
+        if (body.email !== undefined
+            && (typeof body.email !== "string" || body.email.trim().toLowerCase() !== req.user.email.toLowerCase())) {
             return res.status(409).json({
                 success: false,
-                message: "An account with this email already exists."
+                message: "Email changes are not available from profile settings."
             });
         }
 
-        const updates = { name, email };
-        const profileFields = [
-            "dateOfBirth", "gender", "phone", "address", "height", "weight",
-            "bloodGroup", "allergies", "existingConditions", "emergencyName",
-            "emergencyRelation", "emergencyPhone"
-        ];
+        const updates = {};
+        if (body.name !== undefined) {
+            if (typeof body.name !== "string") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Full name must be text."
+                });
+            }
+            const name = body.name.trim();
+            if (!name || name.length > 100) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Full name is required and must be 100 characters or fewer."
+                });
+            }
+            updates.name = name;
+        }
 
         if (body.healthProfile !== undefined) {
             if (!body.healthProfile || typeof body.healthProfile !== "object" || Array.isArray(body.healthProfile)) {
@@ -362,7 +447,14 @@ const updateMe = async (req, res) => {
                 });
             }
 
-            for (const field of profileFields) {
+            if (Object.keys(body.healthProfile).some((field) => !allowedProfileFields.includes(field))) {
+                return res.status(400).json({
+                    success: false,
+                    message: "The health profile contains unsupported fields."
+                });
+            }
+
+            for (const field of allowedProfileFields) {
                 if (Object.prototype.hasOwnProperty.call(body.healthProfile, field)) {
                     if (typeof body.healthProfile[field] !== "string") {
                         return res.status(400).json({
@@ -370,9 +462,24 @@ const updateMe = async (req, res) => {
                             message: `Health profile field "${field}" must be text.`
                         });
                     }
-                    updates[`healthProfile.${field}`] = body.healthProfile[field].trim();
+                    const value = body.healthProfile[field].trim();
+                    const validationError = validateProfileField(field, value);
+                    if (validationError) {
+                        return res.status(400).json({
+                            success: false,
+                            message: validationError
+                        });
+                    }
+                    updates[`healthProfile.${field}`] = value;
                 }
             }
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide at least one profile field to update."
+            });
         }
 
         const user = await User.findByIdAndUpdate(
@@ -380,6 +487,12 @@ const updateMe = async (req, res) => {
             { $set: updates },
             { new: true, runValidators: true }
         );
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User profile was not found."
+            });
+        }
 
         res.status(200).json({
             success: true,

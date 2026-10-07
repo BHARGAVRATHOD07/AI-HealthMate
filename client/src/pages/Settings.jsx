@@ -26,7 +26,7 @@ const Settings = () => {
 
   // Account State
   const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
+  const email = user?.email || "";
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
@@ -40,9 +40,8 @@ const Settings = () => {
     e.preventDefault();
     setSavingAccount(true);
     try {
-      const updatedUser = await updateProfile({ name, email });
+      const updatedUser = await updateProfile({ name });
       setName(updatedUser.name);
-      setEmail(updatedUser.email);
       setToastMessage("Account settings saved.");
     } catch (error) {
       setToastMessage(`Could not save account settings: ${error.message}`);
@@ -128,7 +127,7 @@ const Settings = () => {
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
         {/* Account Settings Card */}
-        <Card title="Account Information" subtitle="Update profile name and email address" icon={User}>
+        <Card title="Account Information" subtitle="Update your profile name and view your account email" icon={User}>
           <form onSubmit={handleSaveAccount} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem" }}>
               <Input
@@ -141,8 +140,8 @@ const Settings = () => {
                 label="Email Address"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                disabled
+                helperText="Account email changes are not available from settings."
               />
             </div>
             <div>
