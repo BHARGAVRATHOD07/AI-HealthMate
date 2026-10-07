@@ -82,6 +82,28 @@ export const changeAuthenticatedPassword = async (currentPassword, newPassword) 
   return data;
 };
 
+export const requestPasswordResetOtp = async (email) => {
+  const response = await fetch(`${API_URL}/api/auth/forgot-password/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not send the verification code.");
+  return data;
+};
+
+export const resetPasswordWithOtp = async (email, code, newPassword) => {
+  const response = await fetch(`${API_URL}/api/auth/forgot-password/reset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code, newPassword }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not reset the password.");
+  return data;
+};
+
 /**
  * Send a message to the AI Health Assistant (Gemini).
  * Endpoint: POST /api/ai/chat  (requires JWT)

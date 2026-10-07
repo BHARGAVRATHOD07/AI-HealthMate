@@ -1,6 +1,166 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../models/User");
+const PasswordResetOtp = require("../models/PasswordResetOtp");
+const { getSmtpConfig, sendPasswordResetOtp } = require("../utils/emailService");
+
+const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_RESEND_COOLDOWN_MS = 60 * 1000;
+const PASSWORD_RESET_MAX_ATTEMPTS = 5;
+
+const hashPasswordResetOtp = (email, code) => crypto
+    .createHmac("sha256", process.env.JWT_SECRET)
+    .update(`${email}:${code}`)
+    .digest("hex");
+
+const genericResetRequestMessage = "If an account exists for that email, a verification code has been sent.";
+
+const requestPasswordReset = async (req, res) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter a valid email address."
+        });
+    }
+
+    try {
+        getSmtpConfig();
+    } catch (error) {
+        return res.status(503).json({
+            success: false,
+            message: error.code === "SMTP_NOT_CONFIGURED"
+                ? "Email delivery is not configured. Add the SMTP settings to the server environment."
+                : error.message
+        });
+    }
+
+    try {
+        const user = await User.findOne({ email }).select("_id");
+        if (!user) {
+            return res.status(200).json({ success: true, message: genericResetRequestMessage });
+        }
+
+        const now = new Date();
+        const existingRequest = await PasswordResetOtp.findOne({ email });
+        if (existingRequest && now.getTime() - existingRequest.lastSentAt.getTime() < PASSWORD_RESET_RESEND_COOLDOWN_MS) {
+            return res.status(200).json({ success: true, message: genericResetRequestMessage });
+        }
+
+        const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+        const request = await PasswordResetOtp.findOneAndUpdate(
+            { email },
+            {
+                $set: {
+                    codeHash: hashPasswordResetOtp(email, code),
+                    attempts: 0,
+                    expiresAt: new Date(now.getTime() + PASSWORD_RESET_OTP_TTL_MS),
+                    lastSentAt: now
+                }
+            },
+            { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+        );
+
+        try {
+            await sendPasswordResetOtp(email, code);
+        } catch (error) {
+            await PasswordResetOtp.deleteOne({ _id: request._id });
+            console.error("Password reset email delivery failed:", error.message);
+            return res.status(502).json({
+                success: false,
+                message: "Could not send the verification email. Check the SMTP configuration and try again."
+            });
+        }
+
+        return res.status(200).json({ success: true, message: genericResetRequestMessage });
+    } catch (error) {
+        console.error("Password reset request failed:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Could not start password recovery. Please try again."
+        });
+    }
+};
+
+const resetPasswordWithOtp = async (req, res) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+    const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+
+    if (!/^\S+@\S+\.\S+$/.test(email) || !/^\d{6}$/.test(code)) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter a valid email address and six-digit verification code."
+        });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({
+            success: false,
+            message: "Password must be at least 6 characters."
+        });
+    }
+
+    try {
+        const now = new Date();
+        const otp = await PasswordResetOtp.findOneAndUpdate(
+            { email, expiresAt: { $gt: now }, attempts: { $lt: PASSWORD_RESET_MAX_ATTEMPTS } },
+            { $inc: { attempts: 1 } },
+            { new: true }
+        );
+
+        if (!otp) {
+            return res.status(400).json({
+                success: false,
+                message: "The verification code is invalid or expired. Request a new code and try again."
+            });
+        }
+
+        const submittedHash = Buffer.from(hashPasswordResetOtp(email, code), "hex");
+        const storedHash = Buffer.from(otp.codeHash, "hex");
+        if (submittedHash.length !== storedHash.length || !crypto.timingSafeEqual(submittedHash, storedHash)) {
+            return res.status(400).json({
+                success: false,
+                message: "The verification code is invalid or expired. Request a new code and try again."
+            });
+        }
+
+        const consumed = await PasswordResetOtp.deleteOne({
+            _id: otp._id,
+            codeHash: otp.codeHash,
+            attempts: otp.attempts
+        });
+        if (consumed.deletedCount !== 1) {
+            return res.status(400).json({
+                success: false,
+                message: "The verification code is invalid or expired. Request a new code and try again."
+            });
+        }
+
+        const user = await User.findOne({ email }).select("+password");
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "The verification code is invalid or expired. Request a new code and try again."
+            });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 12);
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Your password has been reset. You can now log in."
+        });
+    } catch (error) {
+        console.error("Password reset failed:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Could not reset the password. Please try again."
+        });
+    }
+};
 
 // ─── Helper: Generate a signed JWT ────────────────────────────────────────────
 const generateToken = (userId) => {
@@ -255,4 +415,12 @@ const changePassword = async (req, res) => {
     }
 };
 
-module.exports = { register, login, getMe, updateMe, changePassword };
+module.exports = {
+    register,
+    login,
+    getMe,
+    updateMe,
+    changePassword,
+    requestPasswordReset,
+    resetPasswordWithOtp
+};
