@@ -1,5 +1,7 @@
 const Medication = require("../models/Medication");
 
+const serializeMedication = (medication) => medication.toObject();
+
 // GET /api/medications — get user's medications
 const getMedications = async (req, res) => {
     try {
@@ -72,6 +74,37 @@ const updateMedication = async (req, res) => {
     }
 };
 
+// PATCH /api/medications/:id/taken — record or undo today's dose
+const setMedicationTaken = async (req, res) => {
+    try {
+        if (typeof req.body.taken !== "boolean") {
+            return res.status(400).json({
+                success: false,
+                message: "Taken status must be a boolean."
+            });
+        }
+
+        const medication = await Medication.findOne({
+            _id: req.params.id,
+            user: req.user._id
+        });
+
+        if (!medication) {
+            return res.status(404).json({ success: false, message: "Medication not found." });
+        }
+
+        medication.lastTakenAt = req.body.taken ? new Date() : null;
+        await medication.save();
+
+        res.status(200).json({
+            success: true,
+            data: serializeMedication(medication)
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // DELETE /api/medications/:id
 const deleteMedication = async (req, res) => {
     try {
@@ -90,4 +123,4 @@ const deleteMedication = async (req, res) => {
     }
 };
 
-module.exports = { getMedications, createMedication, updateMedication, deleteMedication };
+module.exports = { getMedications, createMedication, updateMedication, setMedicationTaken, deleteMedication };

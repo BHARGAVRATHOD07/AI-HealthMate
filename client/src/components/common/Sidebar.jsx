@@ -56,7 +56,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       <aside
         style={{
           width: "260px",
-          backgroundColor: "var(--bg-sidebar)",
+          background: "linear-gradient(180deg, var(--bg-sidebar), var(--bg-card-alt))",
           borderRight: "1px solid var(--border-color)",
           display: "flex",
           flexDirection: "column",
@@ -66,40 +66,41 @@ const Sidebar = ({ isOpen, onClose }) => {
           top: 0,
           left: 0,
           zIndex: 45,
-          transition: "transform 0.25s ease",
-          transform: isOpen ? "translateX(0)" : "translateX(-100%)"
+          transition: "transform 0.25s ease, box-shadow 0.25s ease",
+          transform: isOpen ? "translateX(0)" : "translateX(-100%)",
+          boxShadow: "2px 0 20px rgba(15, 23, 42, 0.04)"
         }}
         className="sidebar-container lg:translate-x-0"
       >
-        {/* Top Header */}
         <div>
           <div
             style={{
-              padding: "1.25rem 1.5rem",
+              padding: "1.4rem 1.5rem",
               borderBottom: "1px solid var(--border-color)",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between"
+              justifyContent: "space-between",
+              background: "linear-gradient(180deg, rgba(22, 163, 74, 0.03), transparent)"
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "0.6rem",
-                  background: "linear-gradient(135deg, #0284c7 0%, #0d9488 100%)",
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "0.8rem",
+                  background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
                   color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  boxShadow: "0 4px 10px rgba(2, 132, 199, 0.25)"
+                  boxShadow: "0 10px 20px rgba(22, 163, 74, 0.25)"
                 }}
               >
-                <Activity size={20} />
+                <Activity size={21} />
               </div>
-              <span style={{ fontSize: "1.15rem", fontWeight: "800", color: "var(--text-main)", letterSpacing: "-0.02em" }}>
-                AI Health<span style={{ color: "#0284c7" }}>Mate</span>
+              <span style={{ fontSize: "1.1rem", fontWeight: "800", color: "var(--text-main)", letterSpacing: "-0.02em" }}>
+                AI Health<span style={{ color: "#16A34A" }}>Mate</span>
               </span>
             </div>
 
@@ -119,8 +120,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             </button>
           </div>
 
-          {/* Navigation Items */}
-          <nav style={{ padding: "1.25rem 0.85rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <nav style={{ padding: "1.1rem 0.8rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -132,19 +132,33 @@ const Sidebar = ({ isOpen, onClose }) => {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "0.7rem 0.9rem",
-                    borderRadius: "0.75rem",
+                    padding: "0.8rem 0.9rem",
+                    borderRadius: "0.9rem",
                     fontSize: "0.9rem",
-                    fontWeight: isActive ? "700" : "500",
-                    color: isActive ? "#0284c7" : "var(--text-muted)",
-                    backgroundColor: isActive ? "rgba(2, 132, 199, 0.12)" : "transparent",
+                    fontWeight: isActive ? "700" : "600",
+                    color: isActive ? "#16A34A" : "var(--text-muted)",
+                    background: isActive ? "linear-gradient(90deg, rgba(22, 163, 74,0.12), rgba(5, 150, 105,0.06))" : "transparent",
                     textDecoration: "none",
-                    transition: "all 0.15s ease"
+                    border: isActive ? "1px solid rgba(22, 163, 74, 0.14)" : "1px solid transparent",
+                    transition: "all 0.18s ease"
                   })}
-                  className="sidebar-link hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="sidebar-link"
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <Icon size={19} />
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "0.7rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "rgba(22, 163, 74, 0.08)",
+                        color: "inherit"
+                      }}
+                    >
+                      <Icon size={18} />
+                    </div>
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
@@ -152,9 +166,9 @@ const Sidebar = ({ isOpen, onClose }) => {
                       style={{
                         fontSize: "0.68rem",
                         fontWeight: "800",
-                        padding: "0.15rem 0.45rem",
+                        padding: "0.18rem 0.45rem",
                         borderRadius: "9999px",
-                        backgroundColor: "#0d9488",
+                        background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
                         color: "#ffffff"
                       }}
                     >
@@ -167,42 +181,43 @@ const Sidebar = ({ isOpen, onClose }) => {
           </nav>
         </div>
 
-        {/* Footer User Profile & Logout */}
         <div style={{ padding: "1rem 0.85rem", borderTop: "1px solid var(--border-color)" }}>
           <div
             style={{
-              padding: "0.75rem",
-              borderRadius: "0.75rem",
-              backgroundColor: "var(--bg-main)",
+              padding: "0.8rem 0.85rem",
+              borderRadius: "1rem",
+              background: "linear-gradient(180deg, rgba(22, 163, 74, 0.05), rgba(5, 150, 105, 0.03))",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: "0.65rem"
+              marginBottom: "0.75rem"
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
+                  width: "38px",
+                  height: "38px",
                   borderRadius: "50%",
-                  backgroundColor: "#0284c7",
+                  background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
                   color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: "700",
-                  fontSize: "0.95rem"
+                  fontSize: "0.95rem",
+                  boxShadow: "0 8px 18px rgba(22, 163, 74, 0.22)"
                 }}
               >
-                {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
+                {user?.name ? user.name.charAt(0).toUpperCase() : "P"}
               </div>
               <div style={{ overflow: "hidden" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--text-main)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                  {user?.name || "Alex Johnson"}
+                <div style={{ fontSize: "0.84rem", fontWeight: "700", color: "var(--text-main)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                  {user?.name || "Patient"}
                 </div>
-                <div style={{ fontSize: "0.725rem", color: "var(--text-subtle)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                  {user?.email || "alex@example.com"}
+                <div style={{ fontSize: "0.72rem", color: "var(--text-subtle)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                  {user?.email || "Signed in"}
                 </div>
               </div>
             </div>
@@ -212,17 +227,17 @@ const Sidebar = ({ isOpen, onClose }) => {
             onClick={handleLogout}
             style={{
               width: "100%",
-              padding: "0.65rem 0.9rem",
-              borderRadius: "0.75rem",
-              border: "1px solid var(--border-color)",
-              backgroundColor: "transparent",
+              padding: "0.72rem 0.9rem",
+              borderRadius: "0.9rem",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              backgroundColor: "rgba(239, 68, 68, 0.04)",
               color: "#ef4444",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: "0.5rem",
               fontSize: "0.85rem",
-              fontWeight: "600",
+              fontWeight: "700",
               cursor: "pointer",
               transition: "all 0.15s ease"
             }}

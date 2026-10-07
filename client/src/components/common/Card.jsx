@@ -12,13 +12,14 @@ const Card = ({
   return (
     <div
       style={{
-        backgroundColor: "var(--bg-card)",
+        background: "var(--bg-card-surface)",
         border: "1px solid var(--border-color)",
-        borderRadius: "1rem",
+        borderRadius: "1.15rem",
         boxShadow: "var(--shadow-sm)",
         padding: padding,
         transition: "all 0.2s ease",
         cursor: hoverable ? "pointer" : "default",
+        transform: hoverable ? "translateY(-1px)" : "none",
         ...style
       }}
       className={`health-card ${hoverable ? "hover:border-sky-400 dark:hover:border-sky-600" : ""} ${className}`}
@@ -36,15 +37,16 @@ const Card = ({
             {Icon && (
               <div
                 style={{
-                  width: "38px",
-                  height: "38px",
-                  borderRadius: "0.6rem",
-                  backgroundColor: "rgba(2, 132, 199, 0.1)",
-                  color: "#0284c7",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "0.8rem",
+                  background: "linear-gradient(135deg, rgba(22, 163, 74,0.12), rgba(5, 150, 105,0.08))",
+                  color: "#16A34A",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0
+                  flexShrink: 0,
+                  border: "1px solid rgba(22, 163, 74, 0.08)"
                 }}
               >
                 <Icon size={20} />

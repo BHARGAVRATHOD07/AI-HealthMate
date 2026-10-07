@@ -24,12 +24,20 @@ const getVitals = async (req, res) => {
 // POST /api/vitals — log a new vital reading
 const createVital = async (req, res) => {
     try {
-        const { type, value, unit, status, notes } = req.body;
+        const { type, value, unit, status, notes, loggedAt } = req.body;
 
         if (!type || !value || !unit) {
             return res.status(400).json({
                 success: false,
                 message: "Type, value, and unit are required."
+            });
+        }
+
+        const parsedLoggedAt = loggedAt ? new Date(loggedAt) : undefined;
+        if (loggedAt && Number.isNaN(parsedLoggedAt.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: "Vital reading date must be a valid date."
             });
         }
 
@@ -39,7 +47,8 @@ const createVital = async (req, res) => {
             value,
             unit,
             status: status || "Normal",
-            notes: notes || ""
+            notes: notes || "",
+            ...(parsedLoggedAt ? { loggedAt: parsedLoggedAt } : {})
         });
 
         res.status(201).json({

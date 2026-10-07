@@ -44,6 +44,7 @@ const Modal = ({
         justifyContent: "center",
         padding: "1rem"
       }}
+      className="modal-overlay"
       onClick={onClose}
     >
       <div
@@ -59,7 +60,7 @@ const Modal = ({
           maxHeight: "90vh",
           overflow: "hidden"
         }}
-        className="animate-modal"
+        className="modal-panel animate-modal"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -71,6 +72,7 @@ const Modal = ({
             alignItems: "center",
             justifyContent: "space-between"
           }}
+          className="modal-header"
         >
           <div>
             <h3 style={{ fontSize: "1.125rem", fontWeight: "700", color: "var(--text-main)", margin: 0 }}>
@@ -110,6 +112,7 @@ const Modal = ({
             overflowY: "auto",
             flex: 1
           }}
+          className="modal-content"
         >
           {children}
         </div>

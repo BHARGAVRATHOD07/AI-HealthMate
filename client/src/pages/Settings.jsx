@@ -1,23 +1,32 @@
 import { useState } from "react";
-import { User, Lock, Bell, Moon, Sun, Shield, LogOut, Trash2, Download, Save } from "lucide-react";
+import { User, Lock, Bell, Moon, Sun, Shield, LogOut, Download, Save } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import DashboardLayout from "../layout/DashboardLayout";
 import Card from "../components/common/Card";
 import Button from "../components/common/Button";
 import Input from "../components/common/Input";
-import Modal from "../components/common/Modal";
 import Toast from "../components/common/Toast";
+import {
+  changeAuthenticatedPassword,
+  getVitals,
+  getMedications,
+  getReminders,
+  getRecords
+} from "../api/api";
 
 const Settings = () => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, updateProfile } = useAuth();
 
   const [toastMessage, setToastMessage] = useState("");
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
   // Account State
-  const [name, setName] = useState(user?.name || "Alex Johnson");
-  const [email, setEmail] = useState(user?.email || "alex.johnson@example.com");
+  const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
@@ -27,16 +36,22 @@ const Settings = () => {
   const [smsNotifs, setSmsNotifs] = useState(false);
   const [aiInsightsNotifs, setAiInsightsNotifs] = useState(true);
 
-  // Danger Zone Modal
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-
-  const handleSaveAccount = (e) => {
+  const handleSaveAccount = async (e) => {
     e.preventDefault();
-    updateProfile({ name, email });
-    setToastMessage("Account settings updated successfully!");
+    setSavingAccount(true);
+    try {
+      const updatedUser = await updateProfile({ name, email });
+      setName(updatedUser.name);
+      setEmail(updatedUser.email);
+      setToastMessage("Account settings saved.");
+    } catch (error) {
+      setToastMessage(`Could not save account settings: ${error.message}`);
+    } finally {
+      setSavingAccount(false);
+    }
   };
 
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!currentPassword || !newPassword) {
       setToastMessage("Please enter current and new passwords.");
@@ -46,26 +61,55 @@ const Settings = () => {
       setToastMessage("New passwords do not match.");
       return;
     }
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmNewPassword("");
-    setToastMessage("Password changed successfully!");
+    if (newPassword.length < 6) {
+      setToastMessage("New password must be at least 6 characters.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const response = await changeAuthenticatedPassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setToastMessage(response.message);
+    } catch (error) {
+      setToastMessage(`Could not change password: ${error.message}`);
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
-  const handleExportData = () => {
-    const healthDataJSON = JSON.stringify(
-      { user, exportedAt: new Date().toISOString(), note: "AI HealthMate Patient Data Export" },
-      null,
-      2
-    );
-    const blob = new Blob([healthDataJSON], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `AI_HealthMate_Export_${user?.name || "User"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setToastMessage("Health data exported to JSON!");
+  const handleExportData = async () => {
+    setExportingData(true);
+    try {
+      const [vitals, medications, reminders, records] = await Promise.all([
+        getVitals(),
+        getMedications(),
+        getReminders(),
+        getRecords()
+      ]);
+      const exportData = {
+        user,
+        vitals: vitals.data,
+        medications: medications.data,
+        reminders: reminders.data,
+        records: records.data,
+        exportedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AI_HealthMate_Export_${(user?.name || "User").replace(/[^a-z0-9_-]/gi, "_")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setToastMessage("Health data exported to JSON.");
+    } catch (error) {
+      setToastMessage(`Could not export health data: ${error.message}`);
+    } finally {
+      setExportingData(false);
+    }
   };
 
   return (
@@ -102,7 +146,7 @@ const Settings = () => {
               />
             </div>
             <div>
-              <Button type="submit" variant="primary" size="md" icon={Save}>
+              <Button type="submit" variant="primary" size="md" icon={Save} isLoading={savingAccount}>
                 Save Profile
               </Button>
             </div>
@@ -119,6 +163,7 @@ const Settings = () => {
                 placeholder="••••••••"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
+                required
               />
               <Input
                 label="New Password"
@@ -126,6 +171,8 @@ const Settings = () => {
                 placeholder="••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                minLength={6}
+                required
               />
               <Input
                 label="Confirm New Password"
@@ -133,10 +180,12 @@ const Settings = () => {
                 placeholder="••••••••"
                 value={confirmNewPassword}
                 onChange={(e) => setConfirmNewPassword(e.target.value)}
+                minLength={6}
+                required
               />
             </div>
             <div>
-              <Button type="submit" variant="outline" size="md">
+              <Button type="submit" variant="outline" size="md" isLoading={changingPassword}>
                 Update Password
               </Button>
             </div>
@@ -155,7 +204,7 @@ const Settings = () => {
                 type="checkbox"
                 checked={emailNotifs}
                 onChange={(e) => setEmailNotifs(e.target.checked)}
-                style={{ width: "20px", height: "20px", accentColor: "#0284c7" }}
+                style={{ width: "20px", height: "20px", accentColor: "#16A34A" }}
               />
             </div>
 
@@ -168,7 +217,7 @@ const Settings = () => {
                 type="checkbox"
                 checked={smsNotifs}
                 onChange={(e) => setSmsNotifs(e.target.checked)}
-                style={{ width: "20px", height: "20px", accentColor: "#0284c7" }}
+                style={{ width: "20px", height: "20px", accentColor: "#16A34A" }}
               />
             </div>
 
@@ -181,7 +230,7 @@ const Settings = () => {
                 type="checkbox"
                 checked={aiInsightsNotifs}
                 onChange={(e) => setAiInsightsNotifs(e.target.checked)}
-                style={{ width: "20px", height: "20px", accentColor: "#0284c7" }}
+                style={{ width: "20px", height: "20px", accentColor: "#16A34A" }}
               />
             </div>
           </div>
@@ -222,60 +271,27 @@ const Settings = () => {
               </div>
             </div>
 
-            <Button variant="outline" size="md" icon={Download} onClick={handleExportData}>
+            <Button variant="outline" size="md" icon={Download} isLoading={exportingData} onClick={handleExportData}>
               Export Data
             </Button>
           </div>
         </Card>
 
         {/* Danger Zone Card */}
-        <Card title="Danger Zone" subtitle="Irreversible account actions" icon={LogOut} style={{ borderColor: "#ef4444" }}>
+        <Card title="Account Actions" subtitle="Sign out without deleting your account or health records" icon={LogOut}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
             <div>
-              <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "#ef4444" }}>
-                Delete Account & Purge Data
-              </div>
               <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                Permanently erase your patient profile and medical record vault
+                Permanent account deletion is not available. Contact your administrator if you need your account removed.
               </div>
             </div>
 
-            <Button variant="danger" size="md" icon={Trash2} onClick={() => setDeleteModalOpen(true)}>
-              Delete Account
+            <Button variant="outline" size="md" icon={LogOut} onClick={logout}>
+              Sign Out
             </Button>
           </div>
         </Card>
       </div>
-
-      {/* Delete Account Confirmation Modal */}
-      <Modal
-        isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
-        title="Confirm Account Deletion"
-        subtitle="Are you sure you want to permanently delete your AI HealthMate account?"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <p style={{ fontSize: "0.9rem", color: "var(--text-main)", lineHeight: 1.5 }}>
-            This action cannot be undone. All your health records, vital measurements, medication logs, and profile data will be permanently removed.
-          </p>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <Button variant="outline" size="md" onClick={() => setDeleteModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="md"
-              onClick={() => {
-                setDeleteModalOpen(false);
-                logout();
-              }}
-            >
-              Confirm Delete
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </DashboardLayout>
   );
 };

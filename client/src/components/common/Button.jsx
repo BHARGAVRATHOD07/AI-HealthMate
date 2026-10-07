@@ -10,23 +10,24 @@ const Button = ({
   disabled = false,
   fullWidth = false,
   className = "",
+  style: customStyle = {},
   onClick,
   type = "button",
   ...props
 }) => {
   const inlineVariantStyles = {
-    primary: { backgroundColor: "#0284c7", color: "#ffffff", border: "none" },
-    teal: { backgroundColor: "#0d9488", color: "#ffffff", border: "none" },
+    primary: { background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)", color: "#ffffff", border: "none" },
+    teal: { background: "linear-gradient(135deg, #059669 0%, #047857 100%)", color: "#ffffff", border: "none" },
     secondary: { backgroundColor: "var(--bg-card-hover)", color: "var(--text-main)", border: "1px solid var(--border-color)" },
     outline: { backgroundColor: "transparent", color: "var(--text-main)", border: "1px solid var(--border-color)" },
     ghost: { backgroundColor: "transparent", color: "var(--text-muted)", border: "none" },
-    danger: { backgroundColor: "#ef4444", color: "#ffffff", border: "none" }
+    danger: { background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)", color: "#ffffff", border: "none" }
   };
 
   const inlineSizeStyles = {
-    sm: { padding: "0.4rem 0.75rem", fontSize: "0.8125rem" },
-    md: { padding: "0.6rem 1.1rem", fontSize: "0.9375rem" },
-    lg: { padding: "0.85rem 1.5rem", fontSize: "1rem" }
+    sm: { padding: "0.45rem 0.8rem", fontSize: "0.8125rem" },
+    md: { padding: "0.7rem 1.2rem", fontSize: "0.9375rem" },
+    lg: { padding: "0.9rem 1.55rem", fontSize: "1rem" }
   };
 
   return (
@@ -47,6 +48,7 @@ const Button = ({
         width: fullWidth ? "100%" : "auto",
         ...inlineSizeStyles[size],
         ...inlineVariantStyles[variant],
+        ...customStyle,
       }}
       className={`btn-${variant} ${className}`}
       {...props}

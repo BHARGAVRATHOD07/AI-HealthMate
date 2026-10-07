@@ -17,6 +17,7 @@ import Button from "../components/common/Button";
 import HealthCard from "../components/cards/HealthCard";
 import ReminderCard from "../components/cards/ReminderCard";
 import RecordCard from "../components/cards/RecordCard";
+import EmptyState from "../components/common/EmptyState";
 import Modal from "../components/common/Modal";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
@@ -91,47 +92,55 @@ const Dashboard = () => {
   const safeRecords = Array.isArray(records) ? records : [];
   const safeReminders = Array.isArray(reminders) ? reminders : [];
 
-  // Format vitals for HealthCard component
+  const getLatestVital = (type) =>
+    safeVitals
+      .filter((vital) => vital.type === type)
+      .sort(
+        (a, b) =>
+          new Date(b.loggedAt || b.createdAt || 0).getTime() -
+          new Date(a.loggedAt || a.createdAt || 0).getTime()
+      )[0];
+
   const vitalMetrics = [
     {
       id: "bp",
-      title: "Blood Pressure",
-      value: safeVitals.find(v => v.type === "Blood Pressure")?.value || "118/78",
+      name: "Blood Pressure",
+      value: getLatestVital("Blood Pressure")?.value,
       unit: "mmHg",
-      status: safeVitals.find(v => v.type === "Blood Pressure")?.status || "Normal",
-      change: "Normal Range",
-      trend: "stable",
-      lastUpdated: "Today"
+      status: getLatestVital("Blood Pressure")?.status || "Not logged",
+      lastUpdated: getLatestVital("Blood Pressure")?.loggedAt
+        ? new Date(getLatestVital("Blood Pressure").loggedAt).toLocaleDateString()
+        : null
     },
     {
       id: "hr",
-      title: "Heart Rate",
-      value: safeVitals.find(v => v.type === "Heart Rate")?.value || "72",
+      name: "Heart Rate",
+      value: getLatestVital("Heart Rate")?.value,
       unit: "bpm",
-      status: safeVitals.find(v => v.type === "Heart Rate")?.status || "Normal",
-      change: "Resting Rate",
-      trend: "stable",
-      lastUpdated: "Today"
+      status: getLatestVital("Heart Rate")?.status || "Not logged",
+      lastUpdated: getLatestVital("Heart Rate")?.loggedAt
+        ? new Date(getLatestVital("Heart Rate").loggedAt).toLocaleDateString()
+        : null
     },
     {
       id: "sugar",
-      title: "Blood Sugar",
-      value: safeVitals.find(v => v.type === "Blood Sugar")?.value || "95",
+      name: "Blood Sugar",
+      value: getLatestVital("Blood Sugar")?.value,
       unit: "mg/dL",
-      status: safeVitals.find(v => v.type === "Blood Sugar")?.status || "Normal",
-      change: "Fasting",
-      trend: "stable",
-      lastUpdated: "Today"
+      status: getLatestVital("Blood Sugar")?.status || "Not logged",
+      lastUpdated: getLatestVital("Blood Sugar")?.loggedAt
+        ? new Date(getLatestVital("Blood Sugar").loggedAt).toLocaleDateString()
+        : null
     },
     {
       id: "weight",
-      title: "Weight",
-      value: safeVitals.find(v => v.type === "Weight")?.value || "68.5",
+      name: "Weight",
+      value: getLatestVital("Weight")?.value,
       unit: "kg",
-      status: safeVitals.find(v => v.type === "Weight")?.status || "Normal",
-      change: "Stable",
-      trend: "stable",
-      lastUpdated: "Today"
+      status: getLatestVital("Weight")?.status || "Not logged",
+      lastUpdated: getLatestVital("Weight")?.loggedAt
+        ? new Date(getLatestVital("Weight").loggedAt).toLocaleDateString()
+        : null
     }
   ];
 
@@ -141,32 +150,35 @@ const Dashboard = () => {
       <div
         style={{
           backgroundColor: "var(--bg-card)",
-          borderRadius: "1.25rem",
-          border: "1px solid var(--border-color)",
+          borderRadius: "1.45rem",
+          border: "1px solid rgba(22, 163, 74, 0.18)",
           padding: "1.5rem 1.75rem",
           marginBottom: "1.5rem",
-          boxShadow: "var(--shadow-sm)",
+          boxShadow: "var(--shadow-md)",
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
           gap: "1.25rem",
-          background: "linear-gradient(135deg, rgba(2, 132, 199, 0.06) 0%, rgba(13, 148, 136, 0.06) 100%)"
+          background: "radial-gradient(circle at top left, rgba(22, 163, 74, 0.12), transparent 25%), linear-gradient(135deg, rgba(22, 163, 74, 0.08) 0%, rgba(5, 150, 105, 0.08) 100%)"
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "#0284c7", fontWeight: "700", marginBottom: "0.3rem" }}>
-            <Sparkles size={16} /> Daily Health Summary
+          <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "#16A34A", fontWeight: "700", marginBottom: "0.35rem" }}>
+            <div style={{ width: "24px", height: "24px", borderRadius: "0.6rem", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(22, 163, 74, 0.1)" }}>
+              <Sparkles size={14} />
+            </div>
+            Daily Health Summary
           </div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: "800", color: "var(--text-main)", margin: 0, letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: "1.75rem", fontWeight: "800", color: "var(--text-main)", margin: 0, letterSpacing: "-0.03em" }}>
             Good Day, {user?.name || "Patient"}
           </h1>
-          <p style={{ fontSize: "0.9375rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+          <p style={{ fontSize: "0.9375rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
             Here's your personal health overview and schedule for today.
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
           <Button variant="outline" size="md" icon={Plus} onClick={() => navigate("/monitoring")}>
             Log Vitals
           </Button>
@@ -191,15 +203,15 @@ const Dashboard = () => {
               marginBottom: "1.5rem"
             }}
           >
-            {/* Health Score */}
+            {/* Vitals Count */}
             <Card padding="1.1rem">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Overall Health Score</div>
+                  <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Vitals Logged</div>
                   <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#10b981", margin: "0.15rem 0" }}>
-                    92<span style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: "600" }}>/100</span>
+                    {safeVitals.length}
                   </div>
-                  <span style={{ fontSize: "0.75rem", color: "#10b981", fontWeight: "600" }}>● Optimal Wellness</span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: "600" }}>Measurements recorded</span>
                 </div>
                 <div
                   style={{
@@ -223,7 +235,7 @@ const Dashboard = () => {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "500" }}>Active Medications</div>
-                  <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#0284c7", margin: "0.15rem 0" }}>
+                  <div style={{ fontSize: "1.75rem", fontWeight: "800", color: "#16A34A", margin: "0.15rem 0" }}>
                     {activeMedicationsCount}
                   </div>
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Prescriptions active</span>
@@ -233,8 +245,8 @@ const Dashboard = () => {
                     width: "44px",
                     height: "44px",
                     borderRadius: "0.75rem",
-                    backgroundColor: "rgba(2, 132, 199, 0.12)",
-                    color: "#0284c7",
+                    backgroundColor: "rgba(22, 163, 74, 0.12)",
+                    color: "#16A34A",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center"
@@ -301,9 +313,9 @@ const Dashboard = () => {
           </div>
 
           {/* Main Grid: Health Vitals + Right Column */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.5rem" }} className="lg:grid-cols-3">
+          <div style={{ gridTemplateColumns: "minmax(0, 1fr)", gap: "1.5rem" }} className="dashboard-overview-grid">
             {/* Left Column (2 Spans): Vitals Overview + Recent Records */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} className="lg:col-span-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", minWidth: 0 }}>
               {/* Health Vitals Grid */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
@@ -315,7 +327,7 @@ const Dashboard = () => {
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: "#0284c7",
+                      color: "#16A34A",
                       fontSize: "0.85rem",
                       fontWeight: "700",
                       cursor: "pointer",
@@ -351,7 +363,7 @@ const Dashboard = () => {
                 }
               >
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
-                  {safeRecords.slice(0, 2).map((rec) => (
+                  {safeRecords.length ? safeRecords.slice(0, 2).map((rec) => (
                     <RecordCard
                       key={rec._id || rec.id}
                       record={{
@@ -365,7 +377,15 @@ const Dashboard = () => {
                       }}
                       onView={(r) => setSelectedRecord(r)}
                     />
-                  ))}
+                  )) : (
+                    <EmptyState
+                      icon={FileText}
+                      title="No health records yet"
+                      description="Add your first record to keep reports and notes together."
+                      actionLabel="Add a record"
+                      onAction={() => navigate("/records")}
+                    />
+                  )}
                 </div>
               </Card>
             </div>
@@ -377,10 +397,10 @@ const Dashboard = () => {
                 style={{
                   backgroundColor: "var(--bg-card)",
                   borderRadius: "1.25rem",
-                  border: "1px solid rgba(2, 132, 199, 0.3)",
+                  border: "1px solid rgba(22, 163, 74, 0.3)",
                   padding: "1.5rem",
                   boxShadow: "var(--shadow-md)",
-                  background: "linear-gradient(135deg, rgba(2, 132, 199, 0.1) 0%, rgba(13, 148, 136, 0.1) 100%)",
+                  background: "linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)",
                   position: "relative",
                   overflow: "hidden"
                 }}
@@ -391,12 +411,12 @@ const Dashboard = () => {
                       width: "42px",
                       height: "42px",
                       borderRadius: "0.75rem",
-                      backgroundColor: "#0284c7",
+                      backgroundColor: "#16A34A",
                       color: "#ffffff",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: "0 4px 10px rgba(2, 132, 199, 0.3)"
+                      boxShadow: "0 4px 10px rgba(22, 163, 74, 0.3)"
                     }}
                   >
                     <Bot size={24} />
@@ -405,7 +425,7 @@ const Dashboard = () => {
                     <h3 style={{ fontSize: "1.05rem", fontWeight: "800", color: "var(--text-main)", margin: 0 }}>
                       Need Help Understanding Your Health?
                     </h3>
-                    <span style={{ fontSize: "0.75rem", color: "#0d9488", fontWeight: "700" }}>
+                    <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: "700" }}>
                       AI HealthMate Assistant
                     </span>
                   </div>
@@ -438,7 +458,7 @@ const Dashboard = () => {
                 }
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {safeReminders.slice(0, 4).map((reminder) => (
+                  {safeReminders.length ? safeReminders.slice(0, 4).map((reminder) => (
                     <ReminderCard
                       key={reminder._id || reminder.id}
                       reminder={{
@@ -447,7 +467,15 @@ const Dashboard = () => {
                       }}
                       onToggleComplete={handleToggleReminder}
                     />
-                  ))}
+                  )) : (
+                    <EmptyState
+                      icon={Bell}
+                      title="No reminders scheduled"
+                      description="Create a reminder for medication, appointments, or health checks."
+                      actionLabel="Manage reminders"
+                      onAction={() => navigate("/reminders")}
+                    />
+                  )}
                 </div>
               </Card>
             </div>
@@ -482,10 +510,6 @@ const Dashboard = () => {
       )}
 
       <style>{`
-        @media (min-width: 1024px) {
-          .lg\\:grid-cols-3 { grid-template-columns: 2fr 1fr !important; }
-          .lg\\:col-span-2 { grid-column: span 2 / span 2 !important; }
-        }
       `}</style>
     </DashboardLayout>
   );

@@ -60,6 +60,28 @@ export const getAuthenticatedUser = async () => {
   return data;
 };
 
+export const updateAuthenticatedUser = async (userData) => {
+  const response = await fetch(`${API_URL}/api/auth/me`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(userData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to update profile.");
+  return data;
+};
+
+export const changeAuthenticatedPassword = async (currentPassword, newPassword) => {
+  const response = await fetch(`${API_URL}/api/auth/password`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to change password.");
+  return data;
+};
+
 /**
  * Send a message to the AI Health Assistant (Gemini).
  * Endpoint: POST /api/ai/chat  (requires JWT)
@@ -134,6 +156,17 @@ export const updateMedication = async (id, medData) => {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to update medication.");
+  return data;
+};
+
+export const setMedicationTaken = async (id, taken) => {
+  const response = await fetch(`${API_URL}/api/medications/${id}/taken`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ taken }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to update medication status.");
   return data;
 };
 
@@ -231,6 +264,7 @@ export default {
   getMedications,
   createMedication,
   updateMedication,
+  setMedicationTaken,
   deleteMedication,
   getReminders,
   createReminder,
@@ -242,4 +276,3 @@ export default {
   getAuthHeaders,
   API_URL,
 };
-

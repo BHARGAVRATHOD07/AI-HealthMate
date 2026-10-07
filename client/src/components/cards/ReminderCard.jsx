@@ -14,7 +14,7 @@ const ReminderCard = ({ reminder, onToggleComplete, onDelete }) => {
     <div
       style={{
         backgroundColor: "var(--bg-card)",
-        border: `1px solid ${reminder.completed ? "var(--border-color)" : "rgba(2, 132, 199, 0.3)"}`,
+        border: `1px solid ${reminder.completed ? "var(--border-color)" : "rgba(22, 163, 74, 0.3)"}`,
         borderRadius: "0.85rem",
         padding: "1rem 1.1rem",
         display: "flex",
@@ -48,8 +48,8 @@ const ReminderCard = ({ reminder, onToggleComplete, onDelete }) => {
             width: "36px",
             height: "36px",
             borderRadius: "0.5rem",
-            backgroundColor: reminder.completed ? "var(--bg-main)" : "rgba(2, 132, 199, 0.1)",
-            color: reminder.completed ? "var(--text-muted)" : "#0284c7",
+            backgroundColor: reminder.completed ? "var(--bg-main)" : "rgba(22, 163, 74, 0.1)",
+            color: reminder.completed ? "var(--text-muted)" : "#16A34A",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

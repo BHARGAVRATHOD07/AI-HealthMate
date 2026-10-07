@@ -29,7 +29,7 @@ const Footer = () => {
                 width: "36px",
                 height: "36px",
                 borderRadius: "0.6rem",
-                background: "linear-gradient(135deg, #0284c7 0%, #0d9488 100%)",
+                background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
                 color: "#ffffff",
                 display: "flex",
                 alignItems: "center",
@@ -39,7 +39,7 @@ const Footer = () => {
               <Activity size={20} />
             </div>
             <span style={{ fontSize: "1.2rem", fontWeight: "800", color: "var(--text-main)" }}>
-              AI Health<span style={{ color: "#0284c7" }}>Mate</span>
+              AI Health<span style={{ color: "#16A34A" }}>Mate</span>
             </span>
           </div>
           <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", lineHeight: 1.6, maxWidth: "300px" }}>

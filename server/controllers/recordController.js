@@ -33,12 +33,20 @@ const getRecords = async (req, res) => {
 // POST /api/records — create new health record
 const createRecord = async (req, res) => {
     try {
-        const { title, category, doctorName, facility, summary, status } = req.body;
+        const { title, category, doctorName, facility, summary, status, date } = req.body;
 
         if (!title) {
             return res.status(400).json({
                 success: false,
                 message: "Record title is required."
+            });
+        }
+
+        const parsedDate = date ? new Date(date) : undefined;
+        if (date && Number.isNaN(parsedDate.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: "Record date must be a valid date."
             });
         }
 
@@ -49,7 +57,8 @@ const createRecord = async (req, res) => {
             doctorName: doctorName || "Primary Care Physician",
             facility: facility || "City Health Clinic",
             summary: summary || "",
-            status: status || "Final"
+            status: status || "Final",
+            ...(parsedDate ? { date: parsedDate } : {})
         });
 
         res.status(201).json({

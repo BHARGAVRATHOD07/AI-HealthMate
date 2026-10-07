@@ -78,7 +78,7 @@ const Landing = () => {
         id="home"
         style={{
           padding: "5rem 1.5rem 4rem",
-          background: "radial-gradient(circle at 50% 0%, rgba(2, 132, 199, 0.12) 0%, transparent 70%)"
+          background: "radial-gradient(circle at top center, rgba(22, 163, 74, 0.12), transparent 45%)"
         }}
       >
         <div style={{ maxWidth: "1280px", margin: "0 auto", display: "grid", gridTemplateColumns: "1fr", gap: "3rem", alignItems: "center" }} className="lg:grid-cols-2">
@@ -89,13 +89,14 @@ const Landing = () => {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "0.5rem",
-                padding: "0.4rem 0.9rem",
+                padding: "0.45rem 0.9rem",
                 borderRadius: "9999px",
-                backgroundColor: "rgba(2, 132, 199, 0.1)",
-                color: "#0284c7",
-                fontSize: "0.85rem",
+                backgroundColor: "rgba(22, 163, 74, 0.1)",
+                color: "#16A34A",
+                fontSize: "0.82rem",
                 fontWeight: "700",
-                marginBottom: "1.25rem"
+                marginBottom: "1.25rem",
+                border: "1px solid rgba(22, 163, 74, 0.12)"
               }}
             >
               <Sparkles size={16} /> Intelligent Personal Healthcare Companion
@@ -103,25 +104,25 @@ const Landing = () => {
 
             <h1
               style={{
-                fontSize: "clamp(2.5rem, 5vw, 3.75rem)",
+                fontSize: "clamp(2.6rem, 5vw, 4rem)",
                 fontWeight: "800",
                 color: "var(--text-main)",
-                lineHeight: 1.15,
-                letterSpacing: "-0.03em",
+                lineHeight: 1.08,
+                letterSpacing: "-0.04em",
                 marginBottom: "1.25rem"
               }}
             >
               Your Health. <br />
-              <span style={{ color: "#0284c7" }}>Smarter. Simpler.</span>
+              <span style={{ color: "#16A34A" }}>Smarter. Simpler.</span>
             </h1>
 
             <p
               style={{
-                fontSize: "1.125rem",
+                fontSize: "1.12rem",
                 color: "var(--text-muted)",
-                lineHeight: 1.6,
+                lineHeight: 1.7,
                 marginBottom: "2rem",
-                maxWidth: "540px"
+                maxWidth: "560px"
               }}
             >
               AI HealthMate is your patient-focused healthcare management platform. Effortlessly organize medical records, monitor vitals, manage prescriptions, and access instant AI-powered health insights.
@@ -158,13 +159,14 @@ const Landing = () => {
                 paddingTop: "2.5rem",
                 borderTop: "1px solid var(--border-color)",
                 fontSize: "0.85rem",
-                color: "var(--text-muted)"
+                color: "var(--text-muted)",
+                flexWrap: "wrap"
               }}
             >
-              <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontWeight: "600" }}>
                 <CheckCircle2 size={18} color="#10b981" /> 100% Patient Focused
               </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontWeight: "600" }}>
                 <CheckCircle2 size={18} color="#10b981" /> Confidential & Private
               </span>
             </div>
@@ -174,13 +176,32 @@ const Landing = () => {
           <div style={{ position: "relative" }}>
             <div
               style={{
-                backgroundColor: "var(--bg-card)",
-                borderRadius: "1.5rem",
+                position: "absolute",
+                top: "-0.7rem",
+                right: "1.25rem",
+                zIndex: 3,
+                padding: "0.35rem 0.7rem",
+                borderRadius: "9999px",
+                background: "var(--bg-card)",
+                color: "var(--text-muted)",
                 border: "1px solid var(--border-color)",
-                boxShadow: "var(--shadow-lg)",
+                boxShadow: "var(--shadow-sm)",
+                fontSize: "0.7rem",
+                fontWeight: "700"
+              }}
+            >
+              Sample dashboard preview
+            </div>
+            <div
+              style={{
+                background: "linear-gradient(180deg, rgba(22, 163, 74, 0.08), rgba(5, 150, 105, 0.04))",
+                borderRadius: "1.75rem",
+                border: "1px solid var(--border-color)",
+                boxShadow: "var(--shadow-glow)",
                 padding: "1.75rem",
                 position: "relative",
-                zIndex: 2
+                zIndex: 2,
+                backdropFilter: "blur(10px)"
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
@@ -190,7 +211,7 @@ const Landing = () => {
                       width: "44px",
                       height: "44px",
                       borderRadius: "50%",
-                      backgroundColor: "#0284c7",
+                      backgroundColor: "#16A34A",
                       color: "#ffffff",
                       display: "flex",
                       alignItems: "center",
@@ -235,7 +256,7 @@ const Landing = () => {
 
                 <div style={{ backgroundColor: "var(--bg-main)", padding: "1rem", borderRadius: "1rem", border: "1px solid var(--border-color)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                    <Activity size={16} color="#0284c7" /> Blood Pressure
+                    <Activity size={16} color="#16A34A" /> Blood Pressure
                   </div>
                   <div style={{ fontSize: "1.5rem", fontWeight: "800", color: "var(--text-main)", margin: "0.2rem 0" }}>
                     118/78
@@ -247,8 +268,8 @@ const Landing = () => {
               {/* AI Insight Callout */}
               <div
                 style={{
-                  backgroundColor: "rgba(2, 132, 199, 0.08)",
-                  border: "1px solid rgba(2, 132, 199, 0.2)",
+                  backgroundColor: "rgba(22, 163, 74, 0.08)",
+                  border: "1px solid rgba(22, 163, 74, 0.2)",
                   borderRadius: "1rem",
                   padding: "1rem",
                   display: "flex",
@@ -256,9 +277,9 @@ const Landing = () => {
                   gap: "0.85rem"
                 }}
               >
-                <Bot size={28} color="#0284c7" />
+                <Bot size={28} color="#16A34A" />
                 <div>
-                  <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "#0284c7" }}>AI Healthmate Insight</div>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "700", color: "#16A34A" }}>AI Healthmate Insight</div>
                   <div style={{ fontSize: "0.78rem", color: "var(--text-main)", marginTop: "0.15rem" }}>
                     "Your blood pressure and fasting glucose readings are optimal today. Medication schedule is on track!"
                   </div>
@@ -301,8 +322,8 @@ const Landing = () => {
                       width: "48px",
                       height: "48px",
                       borderRadius: "0.85rem",
-                      backgroundColor: "rgba(2, 132, 199, 0.12)",
-                      color: "#0284c7",
+                      backgroundColor: "rgba(22, 163, 74, 0.12)",
+                      color: "#16A34A",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -348,7 +369,7 @@ const Landing = () => {
                   position: "relative"
                 }}
               >
-                <div style={{ fontSize: "2.25rem", fontWeight: "900", color: "#0284c7", opacity: 0.8, marginBottom: "0.85rem" }}>
+                <div style={{ fontSize: "2.25rem", fontWeight: "900", color: "#16A34A", opacity: 0.8, marginBottom: "0.85rem" }}>
                   {st.step}
                 </div>
                 <h3 style={{ fontSize: "1.1rem", fontWeight: "700", color: "var(--text-main)", marginBottom: "0.4rem" }}>
@@ -368,8 +389,8 @@ const Landing = () => {
         <div style={{ maxWidth: "1280px", margin: "0 auto" }}>
           <div
             style={{
-              backgroundColor: "linear-gradient(135deg, #0284c7 0%, #0d9488 100%)",
-              background: "linear-gradient(135deg, #0284c7 0%, #0d9488 100%)",
+              backgroundColor: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
+              background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
               borderRadius: "2rem",
               padding: "3.5rem 2.5rem",
               color: "#ffffff",
@@ -391,7 +412,7 @@ const Landing = () => {
                 variant="secondary"
                 size="lg"
                 onClick={() => navigate("/register")}
-                style={{ backgroundColor: "#ffffff", color: "#0284c7" }}
+                style={{ backgroundColor: "#ffffff", color: "#16A34A" }}
               >
                 Create Free Account
               </Button>

@@ -7,11 +7,11 @@ const LoadingSpinner = ({ size = "md", color = "primary", label = "" }) => {
   }[size] || 24;
 
   const colorHex = {
-    primary: "#0284c7",
-    teal: "#0d9488",
+    primary: "#16A34A",
+    teal: "#059669",
     white: "#ffffff",
     gray: "#64748b"
-  }[color] || "#0284c7";
+  }[color] || "#16A34A";
 
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>

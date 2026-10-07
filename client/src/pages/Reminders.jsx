@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, Plus, Calendar, Clock, CheckCircle2 } from "lucide-react";
+import { Plus, Calendar, Clock, CheckCircle2 } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import Card from "../components/common/Card";
 import Button from "../components/common/Button";
@@ -37,22 +37,29 @@ const Reminders = () => {
   const [repeat, setRepeat] = useState("Daily");
   const [notes, setNotes] = useState("");
 
-  const fetchRemindersList = async () => {
-    try {
-      setLoading(true);
-      const res = await getReminders();
-      if (res.success) {
-        setReminders(res.data);
-      }
-    } catch (err) {
-      console.error("Failed to load reminders:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchRemindersList();
+    let cancelled = false;
+
+    getReminders()
+      .then((res) => {
+        if (!cancelled && res.success) {
+          setReminders(res.data);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Failed to load reminders:", err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleToggleComplete = async (id) => {
@@ -157,9 +164,9 @@ const Reminders = () => {
               borderRadius: "0.75rem",
               fontSize: "0.85rem",
               fontWeight: "600",
-              border: selectedCategory === cat ? "1px solid #0284c7" : "1px solid var(--border-color)",
-              backgroundColor: selectedCategory === cat ? "rgba(2, 132, 199, 0.12)" : "var(--bg-card)",
-              color: selectedCategory === cat ? "#0284c7" : "var(--text-muted)",
+              border: selectedCategory === cat ? "1px solid #16A34A" : "1px solid var(--border-color)",
+              backgroundColor: selectedCategory === cat ? "rgba(22, 163, 74, 0.12)" : "var(--bg-card)",
+              color: selectedCategory === cat ? "#16A34A" : "var(--text-muted)",
               cursor: "pointer",
               whiteSpace: "nowrap"
             }}
@@ -263,7 +270,7 @@ const Reminders = () => {
             required
           />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
               <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Category</label>
               <select
@@ -298,7 +305,7 @@ const Reminders = () => {
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
             <Input
               label="Date / Day"
               type="text"

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Activity, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from "lucide-react";
+import { Activity, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import Input from "../components/common/Input";
 import Button from "../components/common/Button";
@@ -21,8 +21,6 @@ const Login = () => {
   const [toastMessage, setToastMessage] = useState("");
 
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSuccess, setForgotSuccess] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
@@ -56,21 +54,6 @@ const Login = () => {
     }
   };
 
-  const handleForgotSubmit = (e) => {
-    e.preventDefault();
-    if (!forgotEmail || !/\S+@\S+\.\S+/.test(forgotEmail)) {
-      setToastMessage("Please enter a valid email address");
-      return;
-    }
-    setForgotSuccess(true);
-    setTimeout(() => {
-      setForgotModalOpen(false);
-      setForgotSuccess(false);
-      setForgotEmail("");
-      setToastMessage("Password reset instructions sent to your email!");
-    }, 1500);
-  };
-
   return (
     <div
       style={{
@@ -79,8 +62,7 @@ const Login = () => {
         alignItems: "center",
         justifyContent: "center",
         padding: "1.5rem",
-        backgroundColor: "var(--bg-main)",
-        background: "radial-gradient(circle at 50% 30%, rgba(2, 132, 199, 0.08) 0%, transparent 70%)"
+        background: "radial-gradient(circle at top, rgba(22, 163, 74, 0.13), transparent 30%), linear-gradient(180deg, var(--bg-main), rgba(22, 163, 74, 0.04))"
       }}
     >
       <Toast message={toastMessage} onClose={() => setToastMessage("")} type="info" />
@@ -88,13 +70,14 @@ const Login = () => {
       <div
         style={{
           width: "100%",
-          maxWidth: "440px",
+          maxWidth: "460px",
           backgroundColor: "var(--bg-card)",
-          borderRadius: "1.5rem",
+          borderRadius: "1.75rem",
           border: "1px solid var(--border-color)",
-          boxShadow: "var(--shadow-lg)",
+          boxShadow: "var(--shadow-glow)",
           padding: "2.25rem",
-          animation: "fadeIn 0.25s ease forwards"
+          animation: "fadeIn 0.25s ease forwards",
+          backdropFilter: "blur(10px)"
         }}
       >
         {/* Header */}
@@ -105,18 +88,18 @@ const Login = () => {
                 width: "42px",
                 height: "42px",
                 borderRadius: "0.75rem",
-                background: "linear-gradient(135deg, #0284c7 0%, #0d9488 100%)",
+                background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
                 color: "#ffffff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 4px 12px rgba(2, 132, 199, 0.3)"
+                boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)"
               }}
             >
               <Activity size={24} />
             </div>
             <span style={{ fontSize: "1.35rem", fontWeight: "800", color: "var(--text-main)" }}>
-              AI Health<span style={{ color: "#0284c7" }}>Mate</span>
+              AI Health<span style={{ color: "#16A34A" }}>Mate</span>
             </span>
           </Link>
 
@@ -193,7 +176,7 @@ const Login = () => {
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                style={{ accentColor: "#0284c7" }}
+                style={{ accentColor: "#16A34A" }}
               />
               Remember me
             </label>
@@ -204,7 +187,7 @@ const Login = () => {
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#0284c7",
+                color: "#16A34A",
                 fontWeight: "600",
                 cursor: "pointer"
               }}
@@ -237,7 +220,7 @@ const Login = () => {
           }}
         >
           Don't have an account?{" "}
-          <Link to="/register" style={{ color: "#0284c7", fontWeight: "700" }}>
+          <Link to="/register" style={{ color: "#16A34A", fontWeight: "700" }}>
             Create free profile
           </Link>
         </div>
@@ -248,32 +231,22 @@ const Login = () => {
         isOpen={forgotModalOpen}
         onClose={() => setForgotModalOpen(false)}
         title="Reset Your Password"
-        subtitle="Enter your email address and we'll send you a password reset link."
+        subtitle="Password reset is not configured for this application."
       >
-        {forgotSuccess ? (
-          <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
-            <ShieldCheck size={48} color="#10b981" style={{ margin: "0 auto 1rem" }} />
-            <h4 style={{ fontSize: "1.1rem", fontWeight: "700", color: "var(--text-main)" }}>Reset Link Sent!</h4>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
-              Please check your email inbox for instructions.
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleForgotSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            <Input
-              label="Email Address"
-              type="email"
-              placeholder="you@example.com"
-              icon={Mail}
-              value={forgotEmail}
-              onChange={(e) => setForgotEmail(e.target.value)}
-              required
-            />
-            <Button type="submit" variant="primary" size="md" fullWidth>
-              Send Reset Link
-            </Button>
-          </form>
-        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+            Contact your administrator to recover account access. No reset email will be sent from this application.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            fullWidth
+            onClick={() => setForgotModalOpen(false)}
+          >
+            Close
+          </Button>
+        </div>
       </Modal>
     </div>
   );

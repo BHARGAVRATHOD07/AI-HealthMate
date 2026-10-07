@@ -2,8 +2,8 @@ import { Eye, Trash2, Calendar, User, Building } from "lucide-react";
 
 const RecordCard = ({ record, onView, onDelete }) => {
   const categoryBadgeMap = {
-    "Lab Report": { bg: "rgba(13, 148, 136, 0.12)", color: "#0d9488" },
-    Prescription: { bg: "rgba(2, 132, 199, 0.12)", color: "#0284c7" },
+    "Lab Report": { bg: "rgba(5, 150, 105, 0.12)", color: "#059669" },
+    Prescription: { bg: "rgba(22, 163, 74, 0.12)", color: "#16A34A" },
     "Medical Report": { bg: "rgba(99, 102, 241, 0.12)", color: "#6366f1" },
     Vaccination: { bg: "rgba(16, 185, 129, 0.12)", color: "#10b981" },
     Other: { bg: "rgba(100, 116, 139, 0.12)", color: "#64748b" }

@@ -17,8 +17,8 @@ const Toast = ({ message, type = "success", onClose, duration = 4000 }) => {
     success: {
       icon: CheckCircle2,
       bgColor: "var(--success-bg)",
-      borderColor: "#10b981",
-      textColor: "#065f46"
+      borderColor: "#16A34A",
+      textColor: "#166534"
     },
     error: {
       icon: AlertCircle,
@@ -29,8 +29,8 @@ const Toast = ({ message, type = "success", onClose, duration = 4000 }) => {
     info: {
       icon: Info,
       bgColor: "var(--info-bg)",
-      borderColor: "#3b82f6",
-      textColor: "#1e40af"
+      borderColor: "#059669",
+      textColor: "#047857"
     }
   }[type] || typeConfig.info;
 

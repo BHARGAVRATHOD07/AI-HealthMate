@@ -2,12 +2,21 @@ import { useState, useRef, useEffect } from "react";
 import { Bot, Send, Plus, MessageSquare, ShieldAlert, AlertCircle, RefreshCw, Paperclip } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import Button from "../components/common/Button";
-import { initialAIChats, suggestedAIQuestions } from "../data/mockData";
+import { suggestedAIQuestions } from "../data/mockData";
 import { sendAIMessage } from "../api/api";
 
 const AIAssistant = () => {
-  const [chats, setChats] = useState(initialAIChats);
-  const [activeChatId, setActiveChatId] = useState(initialAIChats[0].id);
+  const [chats, setChats] = useState([{
+    id: "welcome",
+    title: "New Conversation",
+    updatedAt: "Just now",
+    messages: [{
+      sender: "ai",
+      text: "Hello! I am your AI HealthMate Assistant. How can I help you understand your health information today?",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    }]
+  }]);
+  const [activeChatId, setActiveChatId] = useState("welcome");
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -130,13 +139,11 @@ const AIAssistant = () => {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr",
           gap: "1rem",
           flex: 1,
-          minHeight: 0,
-          height: "calc(100vh - 64px - 2.5rem - 3rem - 1rem)"
+          minHeight: 0
         }}
-        className="lg:grid-cols-assistant"
+        className="assistant-chat-grid"
       >
         {/* Left Chat History Sidebar (1 Span) */}
         <div
@@ -151,7 +158,7 @@ const AIAssistant = () => {
             minWidth: 0,
             overflow: "hidden"
           }}
-          className="hidden lg:flex"
+          className="assistant-chat-history hidden"
         >
           <div>
             <Button
@@ -178,8 +185,8 @@ const AIAssistant = () => {
                     padding: "0.65rem 0.85rem",
                     borderRadius: "0.75rem",
                     cursor: "pointer",
-                    backgroundColor: c.id === activeChatId ? "rgba(2, 132, 199, 0.12)" : "transparent",
-                    color: c.id === activeChatId ? "#0284c7" : "var(--text-main)",
+                    backgroundColor: c.id === activeChatId ? "rgba(22, 163, 74, 0.12)" : "transparent",
+                    color: c.id === activeChatId ? "#16A34A" : "var(--text-main)",
                     display: "flex",
                     alignItems: "center",
                     gap: "0.65rem",
@@ -213,7 +220,7 @@ const AIAssistant = () => {
             overflow: "hidden",
             minHeight: 0
           }}
-          className="lg:col-span-assistant-main"
+          className="assistant-chat-main"
         >
           {/* Chat Header */}
           <div
@@ -224,6 +231,7 @@ const AIAssistant = () => {
               alignItems: "center",
               justifyContent: "space-between"
             }}
+            className="assistant-chat-header"
           >
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <div
@@ -231,7 +239,7 @@ const AIAssistant = () => {
                   width: "38px",
                   height: "38px",
                   borderRadius: "0.65rem",
-                  backgroundColor: "#0284c7",
+                  backgroundColor: "#16A34A",
                   color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
@@ -249,6 +257,17 @@ const AIAssistant = () => {
                 </span>
               </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={Plus}
+              className="assistant-mobile-new-chat"
+              aria-label="New Chat"
+              title="New Chat"
+              onClick={handleNewChat}
+            >
+              New Chat
+            </Button>
           </div>
 
           {/* Messages Scroll Area */}
@@ -261,6 +280,7 @@ const AIAssistant = () => {
               flexDirection: "column",
               gap: "1.1rem"
             }}
+            className="assistant-chat-messages"
           >
             {currentChat.messages.map((msg, index) => {
               const isAI = msg.sender === "ai";
@@ -279,7 +299,7 @@ const AIAssistant = () => {
                         width: "34px",
                         height: "34px",
                         borderRadius: "50%",
-                        backgroundColor: "#0284c7",
+                        backgroundColor: "#16A34A",
                         color: "#ffffff",
                         display: "flex",
                         alignItems: "center",
@@ -294,7 +314,7 @@ const AIAssistant = () => {
                   <div
                     style={{
                       maxWidth: "80%",
-                      backgroundColor: isAI ? "var(--bg-main)" : "#0284c7",
+                      backgroundColor: isAI ? "var(--bg-main)" : "#16A34A",
                       color: isAI ? "var(--text-main)" : "#ffffff",
                       padding: "0.9rem 1.1rem",
                       borderRadius: "1.1rem",
@@ -305,6 +325,7 @@ const AIAssistant = () => {
                       lineHeight: 1.55,
                       boxShadow: "var(--shadow-sm)"
                     }}
+                    className="assistant-chat-message"
                   >
                   <div
                     style={{
@@ -348,7 +369,7 @@ const AIAssistant = () => {
                         width: "34px",
                         height: "34px",
                         borderRadius: "50%",
-                        backgroundColor: "#0d9488",
+                        backgroundColor: "#059669",
                         color: "#ffffff",
                         display: "flex",
                         alignItems: "center",
@@ -367,14 +388,14 @@ const AIAssistant = () => {
 
             {isTyping && (
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--text-muted)", fontSize: "0.875rem", padding: "0.5rem 0" }}>
-                <div style={{ width: "34px", height: "34px", borderRadius: "50%", backgroundColor: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: "34px", height: "34px", borderRadius: "50%", backgroundColor: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Bot size={18} color="#fff" />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                   <span>AI HealthMate is thinking</span>
                   <span style={{ display: "flex", gap: "3px" }}>
                     {[0, 1, 2].map(i => (
-                      <span key={i} style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#0284c7", display: "inline-block", animation: `bounce 1.2s ${i * 0.2}s infinite ease-in-out` }} />
+                      <span key={i} style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#16A34A", display: "inline-block", animation: `bounce 1.2s ${i * 0.2}s infinite ease-in-out` }} />
                     ))}
                   </span>
                 </div>
@@ -407,6 +428,7 @@ const AIAssistant = () => {
               gap: "0.5rem",
               overflowX: "auto"
             }}
+            className="assistant-suggestions"
           >
             <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "var(--text-muted)", flexShrink: 0 }}>
               Suggested:
@@ -422,7 +444,7 @@ const AIAssistant = () => {
                   fontWeight: "600",
                   backgroundColor: "var(--bg-card)",
                   border: "1px solid var(--border-color)",
-                  color: "#0284c7",
+                  color: "#16A34A",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
                   flexShrink: 0
@@ -434,13 +456,14 @@ const AIAssistant = () => {
           </div>
 
           {/* Input Box Bar */}
-          <div style={{ padding: "1rem 1.25rem", borderTop: "1px solid var(--border-color)" }}>
+          <div style={{ padding: "1rem 1.25rem", borderTop: "1px solid var(--border-color)" }} className="assistant-input-bar">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSendMessage();
               }}
               style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+              className="assistant-input-row"
             >
               <button
                 type="button"
@@ -452,6 +475,7 @@ const AIAssistant = () => {
                   padding: "0.35rem"
                 }}
                 title="Attach medical document (UI mock)"
+                className="assistant-attach-button"
               >
                 <Paperclip size={20} />
               </button>
@@ -461,6 +485,7 @@ const AIAssistant = () => {
                 placeholder="Ask a question about your vitals, medications, or health records..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
+                aria-label="Ask the AI Health Assistant"
                 style={{
                   flex: 1,
                   padding: "0.75rem 1rem",
@@ -487,16 +512,6 @@ const AIAssistant = () => {
         </div>
       </div>
 
-      <style>{`
-        @media (min-width: 1024px) {
-          .lg\\:grid-cols-assistant { grid-template-columns: 240px 1fr !important; }
-          .lg\\:col-span-assistant-main { grid-column: 2 / 3 !important; }
-          .hidden.lg\\:flex { display: flex !important; }
-        }
-        @media (min-width: 1280px) {
-          .lg\\:grid-cols-assistant { grid-template-columns: 260px 1fr !important; }
-        }
-      `}</style>
     </DashboardLayout>
   );
 };

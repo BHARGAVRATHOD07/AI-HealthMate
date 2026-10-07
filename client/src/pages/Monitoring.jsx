@@ -5,14 +5,14 @@ import Card from "../components/common/Card";
 import Button from "../components/common/Button";
 import Input from "../components/common/Input";
 import Modal from "../components/common/Modal";
+import EmptyState from "../components/common/EmptyState";
 import Toast from "../components/common/Toast";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
 import { getVitals, createVital } from "../api/api";
-import { chartTrendsData } from "../data/mockData";
 
 // Interactive Custom SVG Chart Component
-const VitalTrendChart = ({ data = [], metricKey = "value", color = "#0284c7" }) => {
+const VitalTrendChart = ({ data = [], metricKey = "value", color = "#16A34A" }) => {
   if (!data || data.length === 0) return null;
 
   const width = 600;
@@ -99,6 +99,13 @@ const VitalTrendChart = ({ data = [], metricKey = "value", color = "#0284c7" }) 
   );
 };
 
+const emptyTrendData = {
+  heartRate: { daily: [], weekly: [], monthly: [] },
+  bloodPressure: { daily: [], weekly: [], monthly: [] },
+  bloodGlucose: { daily: [], weekly: [], monthly: [] },
+  weight: { daily: [], weekly: [], monthly: [] }
+};
+
 const Monitoring = () => {
   const [selectedMetric, setSelectedMetric] = useState("heartRate");
   const [timeframe, setTimeframe] = useState("weekly");
@@ -112,14 +119,14 @@ const Monitoring = () => {
   const [newNotes, setNewNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const [trends, setTrends] = useState(chartTrendsData);
+  const [trends, setTrends] = useState(emptyTrendData);
   const [loading, setLoading] = useState(true);
 
   const metricsInfo = {
     heartRate: { name: "Heart Rate", apiType: "Heart Rate", unit: "bpm", target: "60-100 bpm", icon: Heart, color: "#ef4444" },
-    bloodPressure: { name: "Blood Pressure", apiType: "Blood Pressure", unit: "mmHg", target: "< 120/80 mmHg", icon: Activity, color: "#0284c7" },
+    bloodPressure: { name: "Blood Pressure", apiType: "Blood Pressure", unit: "mmHg", target: "< 120/80 mmHg", icon: Activity, color: "#16A34A" },
     bloodGlucose: { name: "Blood Glucose", apiType: "Blood Sugar", unit: "mg/dL", target: "70-99 mg/dL", icon: Droplet, color: "#10b981" },
-    weight: { name: "Weight Log", apiType: "Weight", unit: "kg", target: "70-74 kg", icon: Scale, color: "#0d9488" }
+    weight: { name: "Weight Log", apiType: "Weight", unit: "kg", target: "70-74 kg", icon: Scale, color: "#059669" }
   };
 
   const currentInfo = metricsInfo[selectedMetric] || metricsInfo.heartRate;
@@ -131,22 +138,44 @@ const Monitoring = () => {
         const response = await getVitals();
         if (response.success && response.data.length > 0) {
           // Group vitals by type for our chart trends
-          const fetchedTrends = { ...chartTrendsData };
+          const fetchedTrends = {
+            heartRate: { daily: [], weekly: [], monthly: [] },
+            bloodPressure: { daily: [], weekly: [], monthly: [] },
+            bloodGlucose: { daily: [], weekly: [], monthly: [] },
+            weight: { daily: [], weekly: [], monthly: [] }
+          };
+          const now = Date.now();
+          const dayStart = new Date().setHours(0, 0, 0, 0);
+          const weekStart = now - 7 * 24 * 60 * 60 * 1000;
+          const monthStart = now - 30 * 24 * 60 * 60 * 1000;
           
           response.data.forEach(vital => {
-            let key = "heartRate";
-            if (vital.type === "Blood Pressure") key = "bloodPressure";
-            if (vital.type === "Blood Sugar") key = "bloodGlucose";
-            if (vital.type === "Weight") key = "weight";
+            const keyByType = {
+              "Heart Rate": "heartRate",
+              "Blood Pressure": "bloodPressure",
+              "Blood Sugar": "bloodGlucose",
+              Weight: "weight"
+            };
+            const key = keyByType[vital.type];
+            const loggedAt = new Date(vital.loggedAt || vital.createdAt).getTime();
+            const value = Number.parseFloat(vital.value);
+            if (!key || !Number.isFinite(loggedAt) || !Number.isFinite(value)) return;
 
-            const numVal = parseFloat(vital.value) || 70;
-            const timeLabel = new Date(vital.loggedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            if (fetchedTrends[key]) {
-              fetchedTrends[key].weekly.push({ time: timeLabel, value: numVal });
-            }
+            const point = {
+              time: new Date(loggedAt).toLocaleDateString(),
+              value,
+              loggedAt
+            };
+            if (loggedAt >= weekStart) fetchedTrends[key].weekly.push(point);
+            if (loggedAt >= dayStart) fetchedTrends[key].daily.push(point);
+            if (loggedAt >= monthStart) fetchedTrends[key].monthly.push(point);
           });
 
+          Object.values(fetchedTrends).forEach((metricTrends) => {
+            Object.values(metricTrends).forEach((points) =>
+              points.sort((a, b) => a.loggedAt - b.loggedAt)
+            );
+          });
           setTrends(fetchedTrends);
         }
       } catch (err) {
@@ -171,20 +200,29 @@ const Monitoring = () => {
         type: currentInfo.apiType,
         value: newVal,
         unit: currentInfo.unit,
+        loggedAt: new Date(`${newDate}T12:00:00`).toISOString(),
         notes: newNotes,
         status: "Normal"
       });
 
+      const loggedAt = new Date(`${newDate}T12:00:00`).getTime();
       const newPoint = {
-        time: "Just now",
-        value: parseFloat(newVal) || 70
+        time: new Date(loggedAt).toLocaleDateString(),
+        value: Number.parseFloat(newVal),
+        loggedAt
       };
 
       setTrends((prev) => ({
         ...prev,
         [selectedMetric]: {
           ...prev[selectedMetric],
-          [timeframe]: [...(prev[selectedMetric]?.[timeframe] || []), newPoint]
+          daily: loggedAt >= new Date().setHours(0, 0, 0, 0)
+            ? [...(prev[selectedMetric]?.daily || []), newPoint]
+            : prev[selectedMetric]?.daily || [],
+          weekly: [...(prev[selectedMetric]?.weekly || []), newPoint].sort((a, b) => a.loggedAt - b.loggedAt),
+          monthly: loggedAt >= Date.now() - 30 * 24 * 60 * 60 * 1000
+            ? [...(prev[selectedMetric]?.monthly || []), newPoint].sort((a, b) => a.loggedAt - b.loggedAt)
+            : prev[selectedMetric]?.monthly || []
         }
       }));
 
@@ -283,7 +321,7 @@ const Monitoring = () => {
                   fontSize: "0.78rem",
                   fontWeight: "700",
                   border: "none",
-                  backgroundColor: timeframe === tf ? "#0284c7" : "transparent",
+                  backgroundColor: timeframe === tf ? "#16A34A" : "transparent",
                   color: timeframe === tf ? "#ffffff" : "var(--text-muted)",
                   cursor: "pointer",
                   textTransform: "capitalize"
@@ -301,11 +339,21 @@ const Monitoring = () => {
               <LoadingSpinner size="md" text="Loading vital analytics..." />
             </div>
           ) : (
-            <VitalTrendChart
-              data={currentChartData}
-              metricKey="value"
-              color={currentInfo.color}
-            />
+            currentChartData.length ? (
+              <VitalTrendChart
+                data={currentChartData}
+                metricKey="value"
+                color={currentInfo.color}
+              />
+            ) : (
+              <EmptyState
+                icon={TrendingUp}
+                title="No readings for this period"
+                description="Log a measurement to see your personal trend history here."
+                actionLabel="Log a reading"
+                onAction={() => setAddModalOpen(true)}
+              />
+            )
           )}
         </div>
       </Card>

@@ -51,6 +51,10 @@ const medicationSchema = new mongoose.Schema(
         },
         endDate: {
             type: Date
+        },
+        lastTakenAt: {
+            type: Date,
+            default: null
         }
     },
     {

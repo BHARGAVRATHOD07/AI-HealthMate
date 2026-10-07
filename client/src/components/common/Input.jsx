@@ -78,8 +78,8 @@ const Input = ({
           }}
           className={`input-field ${className}`}
           onFocus={(e) => {
-            if (!error) e.target.style.borderColor = "#0284c7";
-            e.target.style.boxShadow = "0 0 0 3px rgba(2, 132, 199, 0.15)";
+            if (!error) e.target.style.borderColor = "#16A34A";
+            e.target.style.boxShadow = "0 0 0 3px rgba(22, 163, 74, 0.15)";
           }}
           onBlur={(e) => {
             if (!error) e.target.style.borderColor = "var(--border-color)";

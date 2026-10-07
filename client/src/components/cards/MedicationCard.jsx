@@ -25,8 +25,8 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
                 width: "40px",
                 height: "40px",
                 borderRadius: "0.65rem",
-                backgroundColor: isActive ? "rgba(2, 132, 199, 0.1)" : "var(--bg-main)",
-                color: isActive ? "#0284c7" : "var(--text-muted)",
+                backgroundColor: isActive ? "rgba(22, 163, 74, 0.1)" : "var(--bg-main)",
+                color: isActive ? "#16A34A" : "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -39,7 +39,7 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
               <h4 style={{ fontSize: "1rem", fontWeight: "700", color: "var(--text-main)", margin: 0 }}>
                 {medication.name}
               </h4>
-              <span style={{ fontSize: "0.8125rem", fontWeight: "600", color: "#0284c7" }}>
+              <span style={{ fontSize: "0.8125rem", fontWeight: "600", color: "#16A34A" }}>
                 {medication.dosage}
               </span>
             </div>
@@ -106,7 +106,7 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
         }}
       >
         <button
-          onClick={() => onToggleTaken && onToggleTaken(medication.id)}
+          onClick={() => onToggleTaken && onToggleTaken(medication._id || medication.id)}
           style={{
             padding: "0.4rem 0.85rem",
             borderRadius: "0.5rem",
@@ -145,7 +145,7 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
           )}
           {onDelete && (
             <button
-              onClick={() => onDelete(medication.id)}
+              onClick={() => onDelete(medication._id || medication.id)}
               style={{
                 background: "transparent",
                 border: "none",

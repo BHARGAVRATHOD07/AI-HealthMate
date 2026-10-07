@@ -6,40 +6,65 @@ import Card from "../components/common/Card";
 import Button from "../components/common/Button";
 import Input from "../components/common/Input";
 import Toast from "../components/common/Toast";
-import { initialProfileData } from "../data/mockData";
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const healthProfile = user?.healthProfile || {};
 
   const [formData, setFormData] = useState({
-    fullName: user?.name || initialProfileData.fullName,
-    email: user?.email || initialProfileData.email,
-    dateOfBirth: initialProfileData.dateOfBirth,
-    gender: initialProfileData.gender,
-    phone: initialProfileData.phone,
-    address: initialProfileData.address,
+    fullName: user?.name || "",
+    email: user?.email || "",
+    dateOfBirth: healthProfile.dateOfBirth || "",
+    gender: healthProfile.gender || "",
+    phone: healthProfile.phone || "",
+    address: healthProfile.address || "",
 
-    height: initialProfileData.height,
-    weight: initialProfileData.weight,
-    bloodGroup: initialProfileData.bloodGroup,
-    allergies: initialProfileData.allergies.join(", "),
-    existingConditions: initialProfileData.existingConditions.join(", "),
-    emergencyName: initialProfileData.emergencyContact.name,
-    emergencyRelation: initialProfileData.emergencyContact.relation,
-    emergencyPhone: initialProfileData.emergencyContact.phone
+    height: healthProfile.height || "",
+    weight: healthProfile.weight || "",
+    bloodGroup: healthProfile.bloodGroup || "",
+    allergies: healthProfile.allergies || "",
+    existingConditions: healthProfile.existingConditions || "",
+    emergencyName: healthProfile.emergencyName || "",
+    emergencyRelation: healthProfile.emergencyRelation || "",
+    emergencyPhone: healthProfile.emergencyPhone || ""
   });
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    updateProfile({ name: formData.fullName, email: formData.email });
-    setIsEditing(false);
-    setToastMessage("Profile information updated successfully!");
+    setSaving(true);
+    try {
+      await updateProfile({
+        name: formData.fullName,
+        email: formData.email,
+        healthProfile: {
+          dateOfBirth: formData.dateOfBirth,
+          gender: formData.gender,
+          phone: formData.phone,
+          address: formData.address,
+          height: formData.height,
+          weight: formData.weight,
+          bloodGroup: formData.bloodGroup,
+          allergies: formData.allergies,
+          existingConditions: formData.existingConditions,
+          emergencyName: formData.emergencyName,
+          emergencyRelation: formData.emergencyRelation,
+          emergencyPhone: formData.emergencyPhone
+        }
+      });
+      setIsEditing(false);
+      setToastMessage("Profile information saved.");
+    } catch (error) {
+      setToastMessage(`Could not save profile: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -63,7 +88,14 @@ const Profile = () => {
               <Button variant="outline" size="md" onClick={() => setIsEditing(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" size="md" icon={Save} onClick={handleSave}>
+              <Button
+                type="submit"
+                form="health-profile-form"
+                variant="primary"
+                size="md"
+                icon={Save}
+                isLoading={saving}
+              >
                 Save Changes
               </Button>
             </div>
@@ -75,7 +107,7 @@ const Profile = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+      <form id="health-profile-form" onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
         {/* Personal Information Card */}
         <Card
           title="Personal Information"
@@ -89,6 +121,7 @@ const Profile = () => {
               onChange={(e) => handleChange("fullName", e.target.value)}
               disabled={!isEditing}
               icon={User}
+              required
             />
 
             <Input
@@ -98,6 +131,7 @@ const Profile = () => {
               onChange={(e) => handleChange("email", e.target.value)}
               disabled={!isEditing}
               icon={Mail}
+              required
             />
 
             <Input

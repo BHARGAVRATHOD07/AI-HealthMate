@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { loginUser, registerUser, getAuthenticatedUser } from "../api/api";
+import {
+  loginUser,
+  registerUser,
+  getAuthenticatedUser,
+  updateAuthenticatedUser
+} from "../api/api";
 
 const AuthContext = createContext();
 
@@ -37,7 +42,7 @@ export const AuthProvider = ({ children }) => {
 
       // Optimistically restore UI from cache while we verify
       if (cached) {
-        try { setUser(JSON.parse(cached)); } catch (_) { /* ignore */ }
+        try { setUser(JSON.parse(cached)); } catch { /* Ignore invalid cached user data. */ }
       }
 
       try {
@@ -107,12 +112,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ─── UPDATE LOCAL PROFILE ────────────────────────────────────────────────────
-  const updateProfile = useCallback((updatedFields) => {
-    setUser((prev) => {
-      const updated = { ...prev, ...updatedFields };
-      localStorage.setItem(USER_KEY, JSON.stringify(updated));
-      return updated;
-    });
+  const updateProfile = useCallback(async (updatedFields) => {
+    const response = await updateAuthenticatedUser(updatedFields);
+    if (!response.success) {
+      throw new Error(response.message || "Failed to update profile.");
+    }
+    persistSession(localStorage.getItem(TOKEN_KEY), response.data);
+    return response.data;
   }, []);
 
   return (

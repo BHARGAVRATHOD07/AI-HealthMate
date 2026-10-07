@@ -14,14 +14,22 @@ import {
   getMedications,
   createMedication,
   updateMedication,
+  setMedicationTaken,
   deleteMedication
 } from "../api/api";
+
+const withTakenToday = (medication) => ({
+  ...medication,
+  takenToday: medication.lastTakenAt
+    ? new Date(medication.lastTakenAt).toDateString() === new Date().toDateString()
+    : false
+});
 
 const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
   const timeSlots = [
     { key: "Morning", title: "Morning (6 AM - 12 PM)", icon: Sunrise, color: "#f59e0b" },
-    { key: "Afternoon", title: "Afternoon (12 PM - 5 PM)", icon: Sun, color: "#0284c7" },
-    { key: "Evening", title: "Evening (5 PM - 9 PM)", icon: Sunset, color: "#0d9488" },
+    { key: "Afternoon", title: "Afternoon (12 PM - 5 PM)", icon: Sun, color: "#16A34A" },
+    { key: "Evening", title: "Evening (5 PM - 9 PM)", icon: Sunset, color: "#059669" },
     { key: "Night", title: "Night (9 PM - 12 AM)", icon: Moon, color: "#6366f1" }
   ];
 
@@ -30,7 +38,11 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
       {timeSlots.map((slot) => {
         const SlotIcon = slot.icon;
         const matchingMeds = medications.filter(
-          (m) => m.status === "Active" && (m.timing?.includes(slot.key) || m.timing?.includes("directed") || m.timing?.includes("Morning"))
+          (m) =>
+            m.status === "Active" &&
+            (typeof m.timing === "string"
+              ? m.timing.split(",").map((timing) => timing.trim()).includes(slot.key)
+              : Array.isArray(m.timing) && m.timing.includes(slot.key))
         );
 
         if (matchingMeds.length === 0) return null;
@@ -67,10 +79,10 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                    <Pill size={18} color="#0284c7" />
+                    <Pill size={18} color="#16A34A" />
                     <div>
                       <div style={{ fontSize: "0.9rem", fontWeight: "700", color: "var(--text-main)" }}>
-                        {med.name} <span style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: "600" }}>({med.dosage})</span>
+                        {med.name} <span style={{ fontSize: "0.8rem", color: "#16A34A", fontWeight: "600" }}>({med.dosage})</span>
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                         {med.instructions || med.frequency}
@@ -103,6 +115,68 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
           </div>
         );
       })}
+      {medications.some(
+        (medication) => medication.status === "Active" && medication.timing === "As directed"
+      ) && (
+        <div
+          style={{
+            backgroundColor: "var(--bg-main)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "1rem",
+            padding: "1.1rem"
+          }}
+        >
+          <h4 style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)", margin: "0 0 0.85rem" }}>
+            As directed
+          </h4>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            {medications
+              .filter((medication) => medication.status === "Active" && medication.timing === "As directed")
+              .map((medication) => (
+                <div
+                  key={medication._id || medication.id}
+                  style={{
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "0.75rem",
+                    padding: "0.75rem 1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "0.9rem", fontWeight: "700", color: "var(--text-main)" }}>
+                      {medication.name} <span style={{ fontSize: "0.8rem", color: "#16A34A", fontWeight: "600" }}>({medication.dosage})</span>
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      {medication.instructions || medication.frequency}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onToggleTaken(medication._id || medication.id)}
+                    style={{
+                      padding: "0.3rem 0.65rem",
+                      borderRadius: "0.5rem",
+                      border: medication.takenToday ? "1px solid #10b981" : "1px solid var(--border-color)",
+                      backgroundColor: medication.takenToday ? "rgba(16, 185, 129, 0.12)" : "var(--bg-main)",
+                      color: medication.takenToday ? "#10b981" : "var(--text-muted)",
+                      fontSize: "0.75rem",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.3rem"
+                    }}
+                  >
+                    <CheckCircle2 size={14} />
+                    {medication.takenToday ? "Taken" : "Mark Taken"}
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -123,29 +197,48 @@ const Medications = () => {
   const [instructions, setInstructions] = useState("");
   const [selectedTimings, setSelectedTimings] = useState(["Morning"]);
 
-  const fetchMeds = async () => {
-    try {
-      setLoading(true);
-      const res = await getMedications();
-      if (res.success) {
-        setMedications(res.data);
-      }
-    } catch (err) {
-      console.error("Failed to load medications:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchMeds();
+    let cancelled = false;
+
+    getMedications()
+      .then((res) => {
+        if (!cancelled && res.success) {
+          setMedications(res.data.map(withTakenToday));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Failed to load medications:", err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleToggleTaken = (id) => {
-    setMedications((prev) =>
-      prev.map((m) => ((m._id === id || m.id === id) ? { ...m, takenToday: !m.takenToday } : m))
-    );
-    setToastMessage("Medication status updated.");
+  const handleToggleTaken = async (id) => {
+    const medication = medications.find((item) => item._id === id || item.id === id);
+    if (!medication) return;
+
+    try {
+      const res = await setMedicationTaken(id, !medication.takenToday);
+      if (res.success) {
+        setMedications((prev) =>
+          prev.map((item) =>
+            (item._id === id || item.id === id) ? withTakenToday(res.data) : item
+          )
+        );
+        setToastMessage("Medication status updated.");
+      }
+    } catch (err) {
+      setToastMessage(`Error updating medication status: ${err.message}`);
+    }
   };
 
   const handleDeleteMedication = async (id) => {
@@ -183,7 +276,7 @@ const Medications = () => {
         });
         if (res.success) {
           setMedications((prev) =>
-            prev.map((m) => ((m._id === id || m.id === id) ? res.data : m))
+            prev.map((m) => ((m._id === id || m.id === id) ? withTakenToday(res.data) : m))
           );
           setToastMessage(`Medication "${medName}" updated.`);
         }
@@ -197,7 +290,7 @@ const Medications = () => {
           status: "Active"
         });
         if (res.success) {
-          setMedications((prev) => [res.data, ...prev]);
+          setMedications((prev) => [withTakenToday(res.data), ...prev]);
           setToastMessage(`Medication "${medName}" added to MongoDB!`);
         }
       }
@@ -265,9 +358,9 @@ const Medications = () => {
         </div>
       ) : (
         /* Grid Layout: Left Schedule Timeline, Right Medications Cards */
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.75rem" }} className="lg:grid-cols-3">
+        <div style={{ gap: "1.75rem" }} className="medications-overview-grid">
           {/* Left Column (2 Spans): Active & Completed Cards */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }} className="lg:col-span-2">
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", minWidth: 0 }}>
             {/* Tabs Header */}
             <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem" }}>
               <button
@@ -278,7 +371,7 @@ const Medications = () => {
                   fontSize: "0.9rem",
                   fontWeight: "700",
                   border: "none",
-                  backgroundColor: activeTab === "active" ? "#0284c7" : "transparent",
+                  backgroundColor: activeTab === "active" ? "#16A34A" : "transparent",
                   color: activeTab === "active" ? "#ffffff" : "var(--text-muted)",
                   cursor: "pointer"
                 }}
@@ -293,7 +386,7 @@ const Medications = () => {
                   fontSize: "0.9rem",
                   fontWeight: "700",
                   border: "none",
-                  backgroundColor: activeTab === "completed" ? "#0284c7" : "transparent",
+                  backgroundColor: activeTab === "completed" ? "#16A34A" : "transparent",
                   color: activeTab === "completed" ? "#ffffff" : "var(--text-muted)",
                   cursor: "pointer"
                 }}
@@ -356,7 +449,7 @@ const Medications = () => {
             required
           />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
             <Input
               label="Dosage"
               placeholder="e.g. 10mg, 500mg"
@@ -404,9 +497,9 @@ const Medications = () => {
                       borderRadius: "0.6rem",
                       fontSize: "0.82rem",
                       fontWeight: "600",
-                      border: isSel ? "1px solid #0284c7" : "1px solid var(--border-color)",
-                      backgroundColor: isSel ? "rgba(2, 132, 199, 0.12)" : "var(--bg-main)",
-                      color: isSel ? "#0284c7" : "var(--text-muted)",
+                      border: isSel ? "1px solid #16A34A" : "1px solid var(--border-color)",
+                      backgroundColor: isSel ? "rgba(22, 163, 74, 0.12)" : "var(--bg-main)",
+                      color: isSel ? "#16A34A" : "var(--text-muted)",
                       cursor: "pointer"
                     }}
                   >
@@ -448,12 +541,6 @@ const Medications = () => {
         </form>
       </Modal>
 
-      <style>{`
-        @media (min-width: 1024px) {
-          .lg\\:grid-cols-3 { grid-template-columns: 2fr 1fr !important; }
-          .lg\\:col-span-2 { grid-column: span 2 / span 2 !important; }
-        }
-      `}</style>
     </DashboardLayout>
   );
 };

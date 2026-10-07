@@ -24,6 +24,7 @@ const Navbar = () => {
       }}
     >
       <div
+        className="navbar-content"
         style={{
           maxWidth: "1280px",
           margin: "0 auto",
@@ -40,19 +41,19 @@ const Navbar = () => {
               width: "38px",
               height: "38px",
               borderRadius: "0.65rem",
-              background: "linear-gradient(135deg, #0284c7 0%, #0d9488 100%)",
+              background: "linear-gradient(135deg, #16A34A 0%, #059669 100%)",
               color: "#ffffff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(2, 132, 199, 0.3)"
+              boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)"
             }}
           >
             <Activity size={22} />
           </div>
           <div>
-            <span style={{ fontSize: "1.25rem", fontWeight: "800", color: "var(--text-main)", letterSpacing: "-0.02em" }}>
-              AI Health<span style={{ color: "#0284c7" }}>Mate</span>
+            <span className="navbar-brand-name" style={{ fontSize: "1.25rem", fontWeight: "800", color: "var(--text-main)", letterSpacing: "-0.02em" }}>
+              AI Health<span style={{ color: "#16A34A" }}>Mate</span>
             </span>
           </div>
         </Link>
@@ -84,7 +85,7 @@ const Navbar = () => {
         </nav>
 
         {/* Right Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div className="navbar-actions" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
@@ -102,13 +103,14 @@ const Navbar = () => {
             }}
             aria-label="Toggle Dark Mode"
           >
-            {theme === "dark" ? <Sun size={18} color="#f59e0b" /> : <Moon size={18} color="#0284c7" />}
+            {theme === "dark" ? <Sun size={18} color="#f59e0b" /> : <Moon size={18} color="#16A34A" />}
           </button>
 
           {isAuthenticated ? (
             <Button
               variant="primary"
               size="md"
+              className="navbar-primary-cta"
               icon={UserCheck}
               onClick={() => navigate("/dashboard")}
             >
@@ -119,6 +121,7 @@ const Navbar = () => {
               <Button
                 variant="ghost"
                 size="md"
+                className="navbar-login-button"
                 onClick={() => navigate("/login")}
               >
                 Log In
@@ -126,6 +129,7 @@ const Navbar = () => {
               <Button
                 variant="primary"
                 size="md"
+                className="navbar-primary-cta"
                 icon={ArrowRight}
                 iconPosition="right"
                 onClick={() => navigate("/register")}
@@ -203,6 +207,45 @@ const Navbar = () => {
           >
             Contact
           </a>
+          {!isAuthenticated && (
+            <div style={{ display: "flex", gap: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border-color)" }}>
+              <Button
+                variant="outline"
+                size="md"
+                fullWidth
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate("/login");
+                }}
+              >
+                Log In
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                fullWidth
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate("/register");
+                }}
+              >
+                Get Started
+              </Button>
+            </div>
+          )}
+          {isAuthenticated && (
+            <Button
+              variant="primary"
+              size="md"
+              fullWidth
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigate("/dashboard");
+              }}
+            >
+              Go to Dashboard
+            </Button>
+          )}
         </div>
       )}
 
@@ -210,6 +253,13 @@ const Navbar = () => {
         @media (min-width: 768px) {
           .md\\:flex { display: flex !important; }
           .md\\:hidden { display: none !important; }
+        }
+        @media (max-width: 480px) {
+          .navbar-content { padding: 0.75rem 1rem !important; }
+          .navbar-brand-name { font-size: 1.05rem !important; white-space: nowrap; }
+          .navbar-actions { gap: 0.35rem !important; }
+          .navbar-login-button { display: none !important; }
+          .navbar-primary-cta { display: none !important; }
         }
       `}</style>
     </header>
