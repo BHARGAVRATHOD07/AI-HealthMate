@@ -14,27 +14,27 @@ const medicationSchema = new mongoose.Schema(
         },
         dosage: {
             type: String,
-            required: true
+            required: true,
+            trim: true
         },
         frequency: {
             type: String,
-            required: true
+            required: true,
+            trim: true
         },
         timing: {
             type: String,
-            default: "As directed"
+            trim: true
         },
         prescribedBy: {
             type: String,
-            default: "Primary Physician"
+            trim: true
         },
         refillsLeft: {
-            type: Number,
-            default: 0
+            type: Number
         },
         totalRefills: {
-            type: Number,
-            default: 5
+            type: Number
         },
         instructions: {
             type: String,
@@ -46,8 +46,7 @@ const medicationSchema = new mongoose.Schema(
             default: "Active"
         },
         startDate: {
-            type: Date,
-            default: Date.now
+            type: Date
         },
         endDate: {
             type: Date

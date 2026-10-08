@@ -1,4 +1,4 @@
-import { Clock, CheckCircle2, Circle, Pill, Activity, Droplet, Dumbbell, Calendar, Trash2 } from "lucide-react";
+import { Clock, CheckCircle2, Circle, Pill, Activity, Droplet, Dumbbell, Calendar, Trash2, Edit3 } from "lucide-react";
 
 const categoryIconMap = {
   Medication: Pill,
@@ -7,7 +7,7 @@ const categoryIconMap = {
   Exercise: Dumbbell
 };
 
-const ReminderCard = ({ reminder, onToggleComplete, onDelete }) => {
+const ReminderCard = ({ reminder, onToggleComplete, onDelete, onEdit, disabled = false }) => {
   const IconComponent = categoryIconMap[reminder.category] || Calendar;
 
   return (
@@ -21,17 +21,20 @@ const ReminderCard = ({ reminder, onToggleComplete, onDelete }) => {
         alignItems: "center",
         justifyContent: "space-between",
         gap: "0.85rem",
+        minWidth: 0,
         opacity: reminder.completed ? 0.75 : 1,
         transition: "all 0.2s ease"
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", flex: 1, minWidth: 0 }}>
         <button
           onClick={() => onToggleComplete(reminder.id)}
+          disabled={disabled}
           style={{
             background: "transparent",
             border: "none",
-            cursor: "pointer",
+            cursor: disabled ? "wait" : "pointer",
+            opacity: disabled ? 0.6 : 1,
             color: reminder.completed ? "#10b981" : "var(--text-subtle)",
             display: "flex",
             alignItems: "center",
@@ -59,13 +62,14 @@ const ReminderCard = ({ reminder, onToggleComplete, onDelete }) => {
           <IconComponent size={18} />
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
               fontSize: "0.925rem",
               fontWeight: "600",
               color: "var(--text-main)",
-              textDecoration: reminder.completed ? "line-through" : "none"
+              textDecoration: reminder.completed ? "line-through" : "none",
+              overflowWrap: "anywhere"
             }}
           >
             {reminder.title}
@@ -87,29 +91,54 @@ const ReminderCard = ({ reminder, onToggleComplete, onDelete }) => {
               {reminder.category}
             </span>
           </div>
+          {reminder.displayDate && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.3rem", fontSize: "0.75rem", color: "var(--text-subtle)" }}>
+              <Calendar size={12} /> {reminder.displayDate}
+            </div>
+          )}
+          {reminder.notes && (
+            <div style={{ marginTop: "0.35rem", color: "var(--text-muted)", fontSize: "0.78rem", overflowWrap: "anywhere" }}>
+              {reminder.notes}
+            </div>
+          )}
         </div>
       </div>
 
-      {onDelete && (
-        <button
-          onClick={() => onDelete(reminder.id)}
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            color: "var(--text-subtle)",
-            padding: "0.35rem",
-            borderRadius: "0.4rem",
-            display: "flex",
-            alignItems: "center"
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-subtle)")}
-          title="Delete reminder"
-        >
-          <Trash2 size={16} />
-        </button>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.15rem" }}>
+        {onEdit && (
+          <button
+            onClick={() => onEdit(reminder)}
+            disabled={disabled}
+            style={{ background: "transparent", border: "none", cursor: disabled ? "wait" : "pointer", color: "var(--text-subtle)", padding: "0.35rem", borderRadius: "0.4rem" }}
+            title="Edit reminder"
+            aria-label="Edit reminder"
+          >
+            <Edit3 size={16} />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={() => onDelete(reminder.id)}
+            disabled={disabled}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: disabled ? "wait" : "pointer",
+              color: "var(--text-subtle)",
+              padding: "0.35rem",
+              borderRadius: "0.4rem",
+              display: "flex",
+              alignItems: "center"
+            }}
+            onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.color = "#ef4444"; }}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-subtle)")}
+            title="Delete reminder"
+            aria-label="Delete reminder"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+      </div>
     </div>
   );
 };

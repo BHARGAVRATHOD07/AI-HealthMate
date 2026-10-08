@@ -1,7 +1,20 @@
 import { Pill, Clock, Check, Calendar, Trash2, Edit3 } from "lucide-react";
 
 const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
-  const isActive = medication.status === "Active";
+  const displayStatus = medication.effectiveStatus || medication.status;
+  const isActive = displayStatus === "Active";
+  const formatDate = (value) => {
+    if (!value) return "";
+    const dateValue = typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)
+      ? `${value.slice(0, 10)}T00:00:00`
+      : value;
+    const date = new Date(dateValue);
+    return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString();
+  };
+  const dateRange = [
+    formatDate(medication.startDate),
+    formatDate(medication.endDate)
+  ].filter(Boolean).join(" - ");
 
   return (
     <div
@@ -55,7 +68,7 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
               color: isActive ? "#10b981" : "#64748b"
             }}
           >
-            {medication.status}
+            {displayStatus}
           </span>
         </div>
 
@@ -85,9 +98,20 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
               gap: "0.3rem"
             }}
           >
-            <Calendar size={13} /> {medication.startDate} - {medication.endDate}
+            <Calendar size={13} /> {dateRange || "Dates not recorded"}
           </span>
         </div>
+
+        {medication.prescribedBy && (
+          <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0.4rem 0" }}>
+            Prescribed by {medication.prescribedBy}
+          </p>
+        )}
+        {(medication.refillsLeft != null || medication.totalRefills != null) && (
+          <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0.4rem 0" }}>
+            Refills: {medication.refillsLeft ?? "—"} of {medication.totalRefills ?? "—"}
+          </p>
+        )}
 
         {medication.instructions && (
           <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.45, fontStyle: "italic" }}>
@@ -105,9 +129,10 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
           borderTop: "1px solid var(--border-color)"
         }}
       >
-        <button
-          onClick={() => onToggleTaken && onToggleTaken(medication._id || medication.id)}
-          style={{
+        {isActive ? (
+          <button
+            onClick={() => onToggleTaken && onToggleTaken(medication._id || medication.id)}
+            style={{
             padding: "0.4rem 0.85rem",
             borderRadius: "0.5rem",
             border: medication.takenToday ? "1px solid #10b981" : "1px solid var(--border-color)",
@@ -120,11 +145,14 @@ const MedicationCard = ({ medication, onToggleTaken, onEdit, onDelete }) => {
             fontSize: "0.8125rem",
             fontWeight: "600",
             transition: "all 0.15s ease"
-          }}
-        >
-          <Check size={15} color={medication.takenToday ? "#10b981" : "var(--text-muted)"} />
-          {medication.takenToday ? "Taken Today" : "Mark as Taken"}
-        </button>
+            }}
+          >
+            <Check size={15} color={medication.takenToday ? "#10b981" : "var(--text-muted)"} />
+            {medication.takenToday ? "Taken Today" : "Mark as Taken"}
+          </button>
+        ) : (
+          <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>Dose tracking is only available for active medications.</span>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
           {onEdit && (

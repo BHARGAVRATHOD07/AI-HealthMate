@@ -25,6 +25,51 @@ const withTakenToday = (medication) => ({
     : false
 });
 
+const getTodayDateInput = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+};
+
+const toDateInput = (value) => {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const getMedicationDateKey = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const isMedicationCurrentlyActive = (medication) => {
+  if (medication.status !== "Active") return false;
+  const today = getTodayDateInput();
+  const start = getMedicationDateKey(medication.startDate);
+  const end = getMedicationDateKey(medication.endDate);
+  if ((medication.startDate && !start) || (medication.endDate && !end)) return false;
+  return (!start || start <= today) && (!end || end >= today);
+};
+
+const hasScheduledTimeSlot = (medication, timeSlots) => timeSlots.some(({ key }) =>
+  typeof medication.timing === "string" && medication.timing.toLowerCase().includes(key.toLowerCase())
+);
+
+const getMedicationDisplayStatus = (medication) => {
+  if (isMedicationCurrentlyActive(medication)) return "Active";
+  if (medication.status !== "Active") return medication.status;
+  const today = getTodayDateInput();
+  const end = getMedicationDateKey(medication.endDate);
+  if (end && end < today) return "Expired";
+  const start = getMedicationDateKey(medication.startDate);
+  if (start && start > today) return "Scheduled";
+  return "Needs dates";
+};
+
 const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
   const timeSlots = [
     { key: "Morning", title: "Morning (6 AM - 12 PM)", icon: Sunrise, color: "#f59e0b" },
@@ -41,7 +86,7 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
           (m) =>
             m.status === "Active" &&
             (typeof m.timing === "string"
-              ? m.timing.split(",").map((timing) => timing.trim()).includes(slot.key)
+              ? m.timing.toLowerCase().includes(slot.key.toLowerCase())
               : Array.isArray(m.timing) && m.timing.includes(slot.key))
         );
 
@@ -85,7 +130,7 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
                         {med.name} <span style={{ fontSize: "0.8rem", color: "#16A34A", fontWeight: "600" }}>({med.dosage})</span>
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                        {med.instructions || med.frequency}
+                        {[med.frequency, med.timing, med.instructions].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                   </div>
@@ -116,7 +161,7 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
         );
       })}
       {medications.some(
-        (medication) => medication.status === "Active" && medication.timing === "As directed"
+        (medication) => medication.status === "Active" && !hasScheduledTimeSlot(medication, timeSlots)
       ) && (
         <div
           style={{
@@ -127,11 +172,11 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
           }}
         >
           <h4 style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)", margin: "0 0 0.85rem" }}>
-            As directed
+            Other / as directed
           </h4>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
             {medications
-              .filter((medication) => medication.status === "Active" && medication.timing === "As directed")
+              .filter((medication) => medication.status === "Active" && !hasScheduledTimeSlot(medication, timeSlots))
               .map((medication) => (
                 <div
                   key={medication._id || medication.id}
@@ -150,7 +195,7 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
                       {medication.name} <span style={{ fontSize: "0.8rem", color: "#16A34A", fontWeight: "600" }}>({medication.dosage})</span>
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      {medication.instructions || medication.frequency}
+                      {[medication.timing, medication.frequency, medication.instructions].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <button
@@ -184,31 +229,43 @@ const MedicationScheduleTimeline = ({ medications, onToggleTaken }) => {
 const Medications = () => {
   const [medications, setMedications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState("active");
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingMed, setEditingMed] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("success");
   const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [medName, setMedName] = useState("");
   const [dosage, setDosage] = useState("");
   const [frequency, setFrequency] = useState("Once daily");
+  const [prescribedBy, setPrescribedBy] = useState("");
+  const [refillsLeft, setRefillsLeft] = useState("");
+  const [totalRefills, setTotalRefills] = useState("");
   const [instructions, setInstructions] = useState("");
   const [selectedTimings, setSelectedTimings] = useState(["Morning"]);
+  const [startDate, setStartDate] = useState(getTodayDateInput);
+  const [endDate, setEndDate] = useState("");
+  const [status, setStatus] = useState("Active");
 
   useEffect(() => {
     let cancelled = false;
 
     getMedications()
       .then((res) => {
-        if (!cancelled && res.success) {
+        if (!res.success || !Array.isArray(res.data)) {
+          throw new Error(res.message || "Medication response was invalid.");
+        }
+        if (!cancelled) {
           setMedications(res.data.map(withTakenToday));
+          setLoadError("");
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error("Failed to load medications:", err);
+          setLoadError(err.message || "Could not load medications.");
         }
       })
       .finally(() => {
@@ -221,6 +278,22 @@ const Medications = () => {
       cancelled = true;
     };
   }, []);
+
+  const retryLoadMedications = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const res = await getMedications();
+      if (!res.success || !Array.isArray(res.data)) {
+        throw new Error(res.message || "Medication response was invalid.");
+      }
+      setMedications(res.data.map(withTakenToday));
+    } catch (err) {
+      setLoadError(err.message || "Could not load medications.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggleTaken = async (id) => {
     const medication = medications.find((item) => item._id === id || item.id === id);
@@ -235,9 +308,11 @@ const Medications = () => {
           )
         );
         setToastMessage("Medication status updated.");
+        setToastType("success");
       }
     } catch (err) {
       setToastMessage(`Error updating medication status: ${err.message}`);
+      setToastType("error");
     }
   };
 
@@ -246,8 +321,10 @@ const Medications = () => {
       await deleteMedication(id);
       setMedications((prev) => prev.filter((m) => (m._id !== id && m.id !== id)));
       setToastMessage("Medication deleted.");
+      setToastType("success");
     } catch (err) {
       setToastMessage(`Error deleting medication: ${err.message}`);
+      setToastType("error");
     }
   };
 
@@ -268,30 +345,43 @@ const Medications = () => {
       if (editingMed) {
         const id = editingMed._id || editingMed.id;
         const res = await updateMedication(id, {
-          name: medName,
-          dosage,
-          frequency,
-          instructions,
-          timing: selectedTimings.join(", ")
+          name: medName.trim(),
+          dosage: dosage.trim(),
+          frequency: frequency.trim(),
+          prescribedBy: prescribedBy.trim(),
+          refillsLeft: refillsLeft === "" ? null : Number(refillsLeft),
+          totalRefills: totalRefills === "" ? null : Number(totalRefills),
+          instructions: instructions.trim(),
+          timing: selectedTimings.join(", "),
+          startDate,
+          endDate: endDate || null,
+          status
         });
         if (res.success) {
           setMedications((prev) =>
             prev.map((m) => ((m._id === id || m.id === id) ? withTakenToday(res.data) : m))
           );
           setToastMessage(`Medication "${medName}" updated.`);
+          setToastType("success");
         }
       } else {
         const res = await createMedication({
-          name: medName,
-          dosage,
-          frequency,
-          instructions,
+          name: medName.trim(),
+          dosage: dosage.trim(),
+          frequency: frequency.trim(),
+          prescribedBy: prescribedBy.trim(),
+          refillsLeft: refillsLeft === "" ? null : Number(refillsLeft),
+          totalRefills: totalRefills === "" ? null : Number(totalRefills),
+          instructions: instructions.trim(),
           timing: selectedTimings.join(", "),
-          status: "Active"
+          status,
+          startDate,
+          endDate: endDate || null
         });
         if (res.success) {
           setMedications((prev) => [withTakenToday(res.data), ...prev]);
           setToastMessage(`Medication "${medName}" added to MongoDB!`);
+          setToastType("success");
         }
       }
 
@@ -300,8 +390,17 @@ const Medications = () => {
       setMedName("");
       setDosage("");
       setInstructions("");
+      setFrequency("Once daily");
+      setPrescribedBy("");
+      setRefillsLeft("");
+      setTotalRefills("");
+      setSelectedTimings(["Morning"]);
+      setStartDate(getTodayDateInput());
+      setEndDate("");
+      setStatus("Active");
     } catch (err) {
       setToastMessage(`Error saving medication: ${err.message}`);
+      setToastType("error");
     } finally {
       setSubmitting(false);
     }
@@ -312,18 +411,25 @@ const Medications = () => {
     setMedName(med.name);
     setDosage(med.dosage);
     setFrequency(med.frequency);
+    setPrescribedBy(med.prescribedBy || "");
+    setRefillsLeft(med.refillsLeft ?? "");
+    setTotalRefills(med.totalRefills ?? "");
     setInstructions(med.instructions || "");
     setSelectedTimings(typeof med.timing === "string" ? [med.timing] : (med.timing || ["Morning"]));
+    setStartDate(toDateInput(med.startDate));
+    setEndDate(toDateInput(med.endDate));
+    setStatus(med.status || "Active");
     setAddModalOpen(true);
   };
 
-  const filteredMeds = medications.filter((m) =>
-    activeTab === "active" ? m.status === "Active" : m.status === "Completed"
+  const filteredMeds = medications.filter((medication) =>
+    activeTab === "active" ? isMedicationCurrentlyActive(medication) : !isMedicationCurrentlyActive(medication)
   );
+  const activeMedications = medications.filter(isMedicationCurrentlyActive);
 
   return (
     <DashboardLayout>
-      <Toast message={toastMessage} onClose={() => setToastMessage("")} type="success" />
+      <Toast message={toastMessage} onClose={() => setToastMessage("")} type={toastType} />
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.75rem", flexWrap: "wrap", gap: "1rem" }}>
@@ -344,7 +450,15 @@ const Medications = () => {
             setEditingMed(null);
             setMedName("");
             setDosage("");
+            setFrequency("Once daily");
+            setPrescribedBy("");
+            setRefillsLeft("");
+            setTotalRefills("");
             setInstructions("");
+            setSelectedTimings(["Morning"]);
+            setStartDate(getTodayDateInput());
+            setEndDate("");
+            setStatus("Active");
             setAddModalOpen(true);
           }}
         >
@@ -355,6 +469,11 @@ const Medications = () => {
       {loading ? (
         <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}>
           <LoadingSpinner size="lg" text="Loading prescription schedule..." />
+        </div>
+      ) : loadError ? (
+        <div role="alert" style={{ padding: "2rem", textAlign: "center", color: "var(--text-main)" }}>
+          <p style={{ color: "#b91c1c" }}>Could not load medications: {loadError}</p>
+          <Button variant="outline" size="md" onClick={retryLoadMedications}>Try again</Button>
         </div>
       ) : (
         /* Grid Layout: Left Schedule Timeline, Right Medications Cards */
@@ -376,7 +495,7 @@ const Medications = () => {
                   cursor: "pointer"
                 }}
               >
-                Active Medications ({medications.filter((m) => m.status === "Active").length})
+                Active Medications ({activeMedications.length})
               </button>
               <button
                 onClick={() => setActiveTab("completed")}
@@ -391,7 +510,7 @@ const Medications = () => {
                   cursor: "pointer"
                 }}
               >
-                Past / Completed ({medications.filter((m) => m.status === "Completed").length})
+                Paused / Completed / Out of date ({medications.length - activeMedications.length})
               </button>
             </div>
 
@@ -402,7 +521,8 @@ const Medications = () => {
                     key={med._id || med.id}
                     medication={{
                       ...med,
-                      id: med._id || med.id
+                      id: med._id || med.id,
+                      effectiveStatus: getMedicationDisplayStatus(med)
                     }}
                     onToggleTaken={handleToggleTaken}
                     onEdit={openEditModal}
@@ -413,10 +533,10 @@ const Medications = () => {
             ) : (
               <EmptyState
                 icon={Pill}
-                title={`No ${activeTab} medications`}
-                description="Keep your prescription list updated for accurate reminders."
-                actionLabel="Add Medication"
-                onAction={() => setAddModalOpen(true)}
+                title={`No ${activeTab === "active" ? "active" : "inactive"} medications`}
+                description={activeTab === "active" ? "Add a medication to keep your current schedule up to date." : "Paused, completed, and out-of-date medications will appear here."}
+                actionLabel={activeTab === "active" ? "Add Medication" : undefined}
+                onAction={activeTab === "active" ? () => setAddModalOpen(true) : undefined}
               />
             )}
           </div>
@@ -424,10 +544,14 @@ const Medications = () => {
           {/* Right Column (1 Span): Today's Schedule Timeline */}
           <div>
             <Card title="Daily Dose Timeline" subtitle="Today's scheduled medication slots" icon={Clock}>
-              <MedicationScheduleTimeline
-                medications={medications}
-                onToggleTaken={handleToggleTaken}
-              />
+              {activeMedications.length > 0 ? (
+                <MedicationScheduleTimeline
+                  medications={activeMedications}
+                  onToggleTaken={handleToggleTaken}
+                />
+              ) : (
+                <EmptyState icon={Clock} title="No active medication schedule" description="Active medication dose times will appear here." />
+              )}
             </Card>
           </div>
         </div>
@@ -446,6 +570,7 @@ const Medications = () => {
             placeholder="e.g. Lisinopril, Metformin"
             value={medName}
             onChange={(e) => setMedName(e.target.value)}
+            maxLength={120}
             required
           />
 
@@ -455,14 +580,54 @@ const Medications = () => {
               placeholder="e.g. 10mg, 500mg"
               value={dosage}
               onChange={(e) => setDosage(e.target.value)}
+              maxLength={80}
               required
             />
 
+            <Input
+              label="Frequency"
+              placeholder="e.g. Once daily, every 8 hours, as needed"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+              maxLength={100}
+              required
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
+            <Input
+              label="Prescribed By (Optional)"
+              placeholder="Clinician or practice"
+              value={prescribedBy}
+              onChange={(e) => setPrescribedBy(e.target.value)}
+              maxLength={120}
+            />
+            <Input
+              label="Current Refills (Optional)"
+              type="number"
+              min="0"
+              max="1000"
+              step="1"
+              value={refillsLeft}
+              onChange={(e) => setRefillsLeft(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
+            <Input
+              label="Total Refills (Optional)"
+              type="number"
+              min="0"
+              max="1000"
+              step="1"
+              value={totalRefills}
+              onChange={(e) => setTotalRefills(e.target.value)}
+            />
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-              <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Frequency</label>
+              <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Medication Status</label>
               <select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value)}
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
                 style={{
                   width: "100%",
                   padding: "0.65rem 0.9rem",
@@ -474,12 +639,28 @@ const Medications = () => {
                   outline: "none"
                 }}
               >
-                <option value="Once daily">Once daily</option>
-                <option value="Twice daily">Twice daily</option>
-                <option value="3 times daily">3 times daily</option>
-                <option value="As needed">As needed (PRN)</option>
+                <option value="Active">Active</option>
+                <option value="Paused">Paused</option>
+                <option value="Completed">Completed</option>
               </select>
             </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
+            <Input
+              label="Start Date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+            />
+            <Input
+              label="End Date (Optional)"
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
@@ -517,6 +698,7 @@ const Medications = () => {
               placeholder="e.g. Take with meals in the morning..."
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
+              maxLength={1000}
               style={{
                 width: "100%",
                 padding: "0.65rem 0.9rem",

@@ -79,6 +79,38 @@ const getReminderTime = (reminder) => {
   return hours * 60 + Number(match[2]);
 };
 
+const localDateKey = (value) => {
+  if (!value || (typeof value === "string" && value.toLowerCase() === "today")) {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  }
+  if (typeof value === "string" && value.toLowerCase() === "tomorrow") {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+  }
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const isMedicationCurrentlyActive = (medication) => {
+  if (medication.status !== "Active") return false;
+  const today = localDateKey();
+  const start = localDateKey(medication.startDate);
+  const end = localDateKey(medication.endDate);
+  return (!medication.startDate || start) && (!medication.endDate || end)
+    && (!start || start <= today) && (!end || end >= today);
+};
+
+const isReminderUpcoming = (reminder) => {
+  if (reminder.completed) return false;
+  const date = localDateKey(reminder.date);
+  return Boolean(date && date >= localDateKey());
+};
+
+
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -128,13 +160,13 @@ const Dashboard = () => {
   const records = dashboardData.records.data;
 
   const activeMedications = useMemo(
-    () => medications.filter((medication) => medication.status === "Active"),
+    () => medications.filter(isMedicationCurrentlyActive),
     [medications]
   );
 
   const upcomingReminders = useMemo(
     () => reminders
-      .filter((reminder) => !reminder.completed)
+      .filter(isReminderUpcoming)
       .sort((a, b) => {
         const dateDifference = getReminderSortDate(a) - getReminderSortDate(b);
         return dateDifference || getReminderTime(a) - getReminderTime(b);

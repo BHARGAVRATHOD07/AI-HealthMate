@@ -15,7 +15,7 @@ const reminderSchema = new mongoose.Schema(
         category: {
             type: String,
             enum: ["Medication", "Appointment", "Vitals Check", "Lab Test", "General"],
-            default: "General"
+            required: true
         },
         time: {
             type: String,
@@ -23,12 +23,12 @@ const reminderSchema = new mongoose.Schema(
         },
         date: {
             type: String,
-            default: "Today"
+            required: true
         },
         repeat: {
             type: String,
             enum: ["Daily", "Weekly", "Monthly", "Once"],
-            default: "Daily"
+            required: true
         },
         completed: {
             type: Boolean,

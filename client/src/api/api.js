@@ -221,10 +221,22 @@ export const createReminder = async (reminderData) => {
   return data;
 };
 
-export const toggleReminder = async (id) => {
+export const updateReminder = async (id, reminderData) => {
+  const response = await fetch(`${API_URL}/api/reminders/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(reminderData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to update reminder.");
+  return data;
+};
+
+export const toggleReminder = async (id, completed) => {
   const response = await fetch(`${API_URL}/api/reminders/${id}/toggle`, {
     method: "PATCH",
     headers: getAuthHeaders(),
+    ...(typeof completed === "boolean" ? { body: JSON.stringify({ completed }) } : {}),
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to toggle reminder.");
