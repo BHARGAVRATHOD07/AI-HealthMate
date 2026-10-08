@@ -19,11 +19,11 @@ const recordSchema = new mongoose.Schema(
         },
         doctorName: {
             type: String,
-            default: "Dr. Smith"
+            default: ""
         },
         facility: {
             type: String,
-            default: "City Health Hospital"
+            default: ""
         },
         date: {
             type: Date,

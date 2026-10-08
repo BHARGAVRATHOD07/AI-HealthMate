@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FileText, Plus, Search } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -10,387 +10,470 @@ import RecordCard from "../components/cards/RecordCard";
 import EmptyState from "../components/common/EmptyState";
 import Toast from "../components/common/Toast";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import { createRecord, deleteRecord, getRecord, getRecords, updateRecord } from "../api/api";
 
-import { getRecords, createRecord, deleteRecord } from "../api/api";
+const CATEGORIES = ["Lab Report", "Prescription", "Imaging", "Doctor Note", "Vaccination"];
+const STATUSES = ["Final", "Pending", "Archived"];
+const FIELD_LIMITS = { title: 150, doctorName: 120, facility: 140, summary: 2000 };
 
-const categories = ["All", "Lab Report", "Prescription", "Imaging", "Doctor Note", "Vaccination"];
+const getLocalDateInputValue = () => {
+  const date = new Date();
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+};
+
+const createEmptyForm = () => ({
+  title: "",
+  category: CATEGORIES[0],
+  doctorName: "",
+  facility: "",
+  date: getLocalDateInputValue(),
+  summary: "",
+  status: "Final"
+});
+
+const getFormValues = (record) => ({
+  title: record.title || "",
+  category: record.category || CATEGORIES[0],
+  doctorName: record.doctorName || "",
+  facility: record.facility || "",
+  date: record.date ? new Date(record.date).toISOString().slice(0, 10) : getLocalDateInputValue(),
+  summary: record.summary || "",
+  status: STATUSES.includes(record.status) ? record.status : "Final"
+});
+
+const formatRecordDate = (value) => {
+  if (!value) return "Date not provided";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+};
+
+const selectStyle = {
+  width: "100%",
+  minWidth: 0,
+  padding: "0.65rem 0.9rem",
+  fontSize: "0.9rem",
+  borderRadius: "0.65rem",
+  border: "1px solid var(--border-color)",
+  backgroundColor: "var(--bg-main)",
+  color: "var(--text-main)",
+  outline: "none"
+};
+
+const fieldLabelStyle = {
+  fontSize: "0.85rem",
+  fontWeight: "600",
+  color: "var(--text-main)"
+};
 
 const HealthRecords = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const searchQuery = searchParams.get("search") || "";
+  const [selectedStatus, setSelectedStatus] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
-
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
   const [viewRecord, setViewRecord] = useState(null);
+  const [form, setForm] = useState(createEmptyForm);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("success");
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+  const searchQuery = searchParams.get("search") || "";
 
-  // New Record Form State
-  const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState("Lab Report");
-  const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
-  const [newDoctor, setNewDoctor] = useState("");
-  const [newFacility, setNewFacility] = useState("");
-  const [newDescription, setNewDescription] = useState("");
+  const loadRecords = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const response = await getRecords(selectedCategory, searchQuery, selectedStatus, sortBy);
+      if (!response?.success || !Array.isArray(response.data)) {
+        throw new Error("The records response was invalid.");
+      }
+      setRecords(response.data);
+      return true;
+    } catch {
+      setLoadError(true);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCategory, searchQuery, selectedStatus, sortBy]);
 
   useEffect(() => {
     let cancelled = false;
-
-    getRecords(selectedCategory, searchQuery)
-      .then((res) => {
-        if (!cancelled && res.success) {
-          setRecords(res.data);
+    const fetchRecords = async () => {
+      setLoading(true);
+      setLoadError(false);
+      try {
+        const response = await getRecords(selectedCategory, searchQuery, selectedStatus, sortBy);
+        if (!response?.success || !Array.isArray(response.data)) {
+          throw new Error("The records response was invalid.");
         }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("Failed to fetch records:", err);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
+        if (!cancelled) setRecords(response.data);
+      } catch {
+        if (!cancelled) setLoadError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchRecords();
 
     return () => {
       cancelled = true;
     };
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, selectedStatus, sortBy]);
 
-  const handleAddRecord = async (e) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  const sortedRecords = useMemo(() => [...records].sort((first, second) => {
+    const firstDate = new Date(first.date || first.createdAt || 0).getTime();
+    const secondDate = new Date(second.date || second.createdAt || 0).getTime();
+    const difference = firstDate - secondDate;
+    return sortBy === "oldest" ? difference : -difference;
+  }), [records, sortBy]);
+
+  const notify = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+  };
+
+  const openCreateForm = () => {
+    setEditingRecord(null);
+    setForm(createEmptyForm());
+    setFormOpen(true);
+  };
+
+  const openEditForm = (record) => {
+    setEditingRecord(record);
+    setForm(getFormValues(record));
+    setViewRecord(null);
+    setFormOpen(true);
+  };
+
+  const handleViewRecord = async (record) => {
+    try {
+      const response = await getRecord(record._id || record.id);
+      if (!response?.success || !response.data) {
+        throw new Error("Unable to load health record details.");
+      }
+      setViewRecord(response.data);
+    } catch (error) {
+      notify(error.message || "Unable to load health record details.", "error");
+    }
+  };
+
+  const closeForm = () => {
+    if (submitting) return;
+    setFormOpen(false);
+    setEditingRecord(null);
+    setForm(createEmptyForm());
+  };
+
+  const updateFormField = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSaveRecord = async (event) => {
+    event.preventDefault();
+    const recordData = Object.fromEntries(
+      Object.entries(form).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value])
+    );
+    if (!recordData.title) {
+      notify("Record title is required.", "error");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      const res = await createRecord({
-        title: newTitle,
-        category: newCategory,
-        date: newDate,
-        doctorName: newDoctor || "Dr. Medical Professional",
-        facility: newFacility || "City Hospital",
-        summary: newDescription || "Medical document stored securely in patient vault."
-      });
-
-      if (res.success) {
-        setRecords((prev) => [res.data, ...prev]);
-        setToastMessage(`Record "${newTitle}" saved to MongoDB!`);
+      if (editingRecord) {
+        await updateRecord(editingRecord._id || editingRecord.id, recordData);
+      } else {
+        await createRecord(recordData);
       }
-
-      setAddModalOpen(false);
-      setNewTitle("");
-      setNewDoctor("");
-      setNewFacility("");
-      setNewDescription("");
-    } catch (err) {
-      setToastMessage(`Error saving record: ${err.message}`);
+      setFormOpen(false);
+      setEditingRecord(null);
+      setForm(createEmptyForm());
+      const loaded = await loadRecords();
+      notify(
+        loaded
+          ? editingRecord ? "Health record updated." : "Health record added."
+          : "Record saved, but the list could not be refreshed. Retry to reload it.",
+        loaded ? "success" : "error"
+      );
+      window.dispatchEvent(new CustomEvent("records:updated"));
+    } catch (error) {
+      notify(error.message || "Unable to save the health record.", "error");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteRecord = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this health record?")) return;
+
+    setDeletingId(id);
     try {
       await deleteRecord(id);
-      setRecords((prev) => prev.filter((r) => (r._id !== id && r.id !== id)));
-      setToastMessage("Record deleted successfully.");
-    } catch (err) {
-      setToastMessage(`Error deleting record: ${err.message}`);
+      setRecords((current) => current.filter((record) => (record._id || record.id) !== id));
+      setViewRecord((current) => current && (current._id || current.id) === id ? null : current);
+      notify("Health record deleted.");
+      window.dispatchEvent(new CustomEvent("records:updated"));
+    } catch (error) {
+      notify(error.message || "Unable to delete the health record.", "error");
+    } finally {
+      setDeletingId("");
     }
   };
 
-  // Filter and Sort Logic
-  const filteredRecords = records
-    .filter((r) => {
-      const matchesCategory = selectedCategory === "All" || r.category === selectedCategory;
-      const titleText = r.title || "";
-      const descText = r.summary || r.description || "";
-      const docText = r.doctorName || r.doctor || "";
-      const matchesQuery =
-        titleText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        descText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        docText.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesQuery;
-    })
-    .sort((a, b) => {
-      if (sortBy === "newest") return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
-      if (sortBy === "oldest") return new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt);
-      if (sortBy === "title") return a.title.localeCompare(b.title);
-      return 0;
-    });
+  const handleSearchChange = (event) => {
+    const nextParams = new URLSearchParams(searchParams);
+    const value = event.target.value;
+    if (value) nextParams.set("search", value);
+    else nextParams.delete("search");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const hasActiveFilters = Boolean(searchQuery) || selectedCategory !== "All" || selectedStatus !== "All";
 
   return (
     <DashboardLayout>
-      <Toast message={toastMessage} onClose={() => setToastMessage("")} type="success" />
+      <Toast message={toastMessage} type={toastType} onClose={() => setToastMessage("")} />
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.75rem", flexWrap: "wrap", gap: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: "800", color: "var(--text-main)", margin: 0 }}>
-            Health Records Vault
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--text-main)", margin: 0 }}>
+            Health Records
           </h1>
-          <p style={{ fontSize: "0.9375rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Securely upload, organize, and search your medical test reports and prescriptions
+          <p style={{ fontSize: "0.9375rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
+            Manage your health records and the details you have stored.
           </p>
         </div>
-
-        <Button variant="primary" size="md" icon={Plus} onClick={() => setAddModalOpen(true)}>
-          Upload New Record
+        <Button variant="primary" size="md" icon={Plus} onClick={openCreateForm}>
+          Add Health Record
         </Button>
       </div>
 
-      {/* Search Bar & Filter Controls */}
-      <Card padding="1rem" style={{ marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-          {/* Search Box */}
-          <div style={{ position: "relative", flex: 1, minWidth: "260px" }}>
-            <Search
-              size={18}
-              style={{
-                position: "absolute",
-                left: "0.9rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "var(--text-subtle)"
-              }}
-            />
+      <Card padding="1rem" style={{ marginBottom: "1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: "0.75rem", alignItems: "center" }}>
+          <div style={{ position: "relative", minWidth: 0 }}>
+            <Search size={18} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-subtle)" }} />
             <input
-              type="text"
-              placeholder="Search by report title, doctor name, or hospital..."
+              type="search"
+              placeholder="Search title, category, doctor, or facility"
+              aria-label="Search health records"
               value={searchQuery}
-              onChange={(e) => {
-                const nextParams = new URLSearchParams(searchParams);
-                if (e.target.value) {
-                  nextParams.set("search", e.target.value);
-                } else {
-                  nextParams.delete("search");
-                }
-                setSearchParams(nextParams, { replace: true });
-              }}
+              maxLength={100}
+              onChange={handleSearchChange}
               style={{
-                width: "100%",
-                padding: "0.65rem 0.9rem 0.65rem 2.6rem",
-                fontSize: "0.875rem",
-                borderRadius: "0.75rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-main)",
-                color: "var(--text-main)",
-                outline: "none"
+                ...selectStyle,
+                paddingLeft: "2.5rem"
               }}
             />
           </div>
-
-          {/* Sort Dropdown */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Sort by:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              style={{
-                padding: "0.6rem 0.85rem",
-                fontSize: "0.85rem",
-                borderRadius: "0.75rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-main)",
-                color: "var(--text-main)",
-                outline: "none",
-                fontWeight: "600"
-              }}
-            >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="title">Alphabetical (A-Z)</option>
-            </select>
-          </div>
+          <select
+            aria-label="Filter by category"
+            value={selectedCategory}
+            onChange={(event) => setSelectedCategory(event.target.value)}
+            style={selectStyle}
+          >
+            <option value="All">All categories</option>
+            {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+          <select
+            aria-label="Filter by status"
+            value={selectedStatus}
+            onChange={(event) => setSelectedStatus(event.target.value)}
+            style={selectStyle}
+          >
+            <option value="All">All statuses</option>
+            {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+          <select
+            aria-label="Sort records"
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value)}
+            style={selectStyle}
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
         </div>
       </Card>
 
-      {/* Category Filter Chips */}
-      <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.5rem", marginBottom: "1.5rem" }}>
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            style={{
-              padding: "0.45rem 1rem",
-              borderRadius: "0.75rem",
-              fontSize: "0.85rem",
-              fontWeight: "600",
-              border: selectedCategory === cat ? "1px solid #16A34A" : "1px solid var(--border-color)",
-              backgroundColor: selectedCategory === cat ? "rgba(22, 163, 74, 0.12)" : "var(--bg-card)",
-              color: selectedCategory === cat ? "#16A34A" : "var(--text-muted)",
-              cursor: "pointer",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {cat}
-          </button>
-        ))}
+      <div style={{ marginBottom: "0.85rem" }}>
+        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>Your Records</h2>
       </div>
 
       {loading ? (
         <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}>
-          <LoadingSpinner size="lg" text="Loading health records vault..." />
+          <LoadingSpinner size="lg" text="Loading health records..." />
         </div>
-      ) : (
-        /* Records Grid Display */
-        filteredRecords.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
-            {filteredRecords.map((record) => (
+      ) : loadError ? (
+        <Card padding="1.5rem">
+          <div role="alert" style={{ display: "grid", justifyItems: "center", gap: "0.85rem", textAlign: "center" }}>
+            <p style={{ margin: 0, color: "var(--text-main)", fontWeight: 600 }}>Unable to load health records.</p>
+            <Button variant="outline" onClick={loadRecords}>Retry</Button>
+          </div>
+        </Card>
+      ) : sortedRecords.length ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "1rem" }}>
+          {sortedRecords.map((record) => {
+            const id = record._id || record.id;
+            return (
               <RecordCard
-                key={record._id || record.id}
+                key={id}
                 record={{
                   ...record,
-                  id: record._id || record.id,
-                  doctor: record.doctorName || record.doctor,
-                  date: record.date ? new Date(record.date).toLocaleDateString() : "Recent",
-                  fileType: record.category,
-                  fileSize: "1.2 MB",
-                  description: record.summary || record.description
+                  id,
+                  doctor: record.doctorName,
+                  date: formatRecordDate(record.date)
                 }}
-                onView={(rec) => setViewRecord(rec)}
+                onView={handleViewRecord}
+                onEdit={openEditForm}
                 onDelete={handleDeleteRecord}
+                deleting={deletingId === id}
               />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={FileText}
-            title="No medical records found"
-            description="No documents matched your filter. Upload your lab reports or prescriptions to store them safely."
-            actionLabel="Upload Record"
-            onAction={() => setAddModalOpen(true)}
-          />
-        )
+            );
+          })}
+        </div>
+      ) : hasActiveFilters ? (
+        <EmptyState
+          icon={FileText}
+          title="No records found."
+          description="Try changing your search or filters."
+          actionLabel="Clear filters"
+          onAction={() => {
+            setSelectedCategory("All");
+            setSelectedStatus("All");
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete("search");
+            setSearchParams(nextParams, { replace: true });
+          }}
+        />
+      ) : (
+        <EmptyState
+          icon={FileText}
+          title="No health records yet."
+          description="Add your first health record to start building your health history."
+          actionLabel="Add Health Record"
+          onAction={openCreateForm}
+        />
       )}
 
-      {/* Record Document Viewer Modal */}
       {viewRecord && (
         <Modal
-          isOpen={!!viewRecord}
+          isOpen
           onClose={() => setViewRecord(null)}
           title={viewRecord.title}
-          subtitle={`Category: ${viewRecord.category || viewRecord.fileType} • Date: ${viewRecord.date}`}
+          subtitle={`${viewRecord.category} · ${formatRecordDate(viewRecord.date)}`}
+          maxWidth="680px"
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-            <div>
-              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Physician / Health Facility</div>
-              <div style={{ fontSize: "0.95rem", fontWeight: "700", color: "var(--text-main)", marginTop: "0.15rem" }}>
-                {viewRecord.doctorName || viewRecord.doctor || "Medical Specialist"} ({viewRecord.facility || "Diagnostic Clinic"})
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "1rem" }}>
+            {[
+              ["Category", viewRecord.category],
+              ["Date", formatRecordDate(viewRecord.date)],
+              ["Doctor", viewRecord.doctorName],
+              ["Facility", viewRecord.facility],
+              ["Status", viewRecord.status]
+            ].map(([label, value]) => (
+              <div key={label} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600 }}>{label}</div>
+                <div style={{ color: "var(--text-main)", marginTop: "0.2rem", overflowWrap: "anywhere" }}>{value || "—"}</div>
               </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontWeight: "600" }}>Clinical Impression / Summary</div>
-              <p style={{ fontSize: "0.9rem", color: "var(--text-main)", marginTop: "0.25rem", lineHeight: 1.5 }}>
-                {viewRecord.summary || viewRecord.description}
+            ))}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600 }}>Summary</div>
+              <p style={{ color: "var(--text-main)", margin: "0.25rem 0 0", lineHeight: 1.55, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                {viewRecord.summary || "—"}
               </p>
             </div>
-
-            <div style={{ padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "var(--bg-main)", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-              Document Vault Status: Encrypted & Verified ({viewRecord.category || viewRecord.fileType})
-            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.65rem", marginTop: "1.5rem", flexWrap: "wrap" }}>
+            <Button variant="outline" onClick={() => handleDeleteRecord(viewRecord._id || viewRecord.id)} disabled={deletingId === (viewRecord._id || viewRecord.id)}>
+              Delete
+            </Button>
+            <Button variant="primary" onClick={() => openEditForm(viewRecord)}>Edit record</Button>
           </div>
         </Modal>
       )}
 
-      {/* Add New Record Modal */}
       <Modal
-        isOpen={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
-        title="Upload Medical Record"
-        subtitle="Add a new lab result, imaging report, or prescription to your vault"
+        isOpen={formOpen}
+        onClose={closeForm}
+        title={editingRecord ? "Edit health record" : "Add health record"}
+        subtitle="Enter the information as it appears in your record."
+        maxWidth="720px"
       >
-        <form onSubmit={handleAddRecord} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+        <form onSubmit={handleSaveRecord} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <Input
-            label="Report / Document Title"
-            placeholder="e.g. Lipid Profile, Echocardiogram Report"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
+            label="Title"
+            placeholder="Record title"
+            value={form.title}
+            onChange={(event) => updateFormField("title", event.target.value)}
+            maxLength={FIELD_LIMITS.title}
             required
           />
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "1rem" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-              <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Category</label>
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "0.65rem 0.9rem",
-                  fontSize: "0.9rem",
-                  borderRadius: "0.65rem",
-                  border: "1px solid var(--border-color)",
-                  backgroundColor: "var(--bg-main)",
-                  color: "var(--text-main)",
-                  outline: "none"
-                }}
-              >
-                <option value="Lab Report">Lab Report</option>
-                <option value="Prescription">Prescription</option>
-                <option value="Imaging">Imaging / X-Ray</option>
-                <option value="Doctor Note">Doctor Note</option>
-                <option value="Vaccination">Vaccination</option>
+              <label htmlFor="record-category" style={fieldLabelStyle}>Category</label>
+              <select id="record-category" value={form.category} onChange={(event) => updateFormField("category", event.target.value)} style={selectStyle}>
+                {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
               </select>
             </div>
-
             <Input
               label="Date"
               type="date"
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
+              value={form.date}
+              onChange={(event) => updateFormField("date", event.target.value)}
               required
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="modal-form-grid">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "1rem" }}>
             <Input
-              label="Doctor / Physician Name"
-              placeholder="e.g. Dr. Sarah Jenkins"
-              value={newDoctor}
-              onChange={(e) => setNewDoctor(e.target.value)}
+              label="Doctor"
+              placeholder="Doctor name (optional)"
+              value={form.doctorName}
+              onChange={(event) => updateFormField("doctorName", event.target.value)}
+              maxLength={FIELD_LIMITS.doctorName}
             />
-
             <Input
-              label="Hospital / Clinic Facility"
-              placeholder="e.g. Quest Diagnostics"
-              value={newFacility}
-              onChange={(e) => setNewFacility(e.target.value)}
+              label="Facility"
+              placeholder="Facility name (optional)"
+              value={form.facility}
+              onChange={(event) => updateFormField("facility", event.target.value)}
+              maxLength={FIELD_LIMITS.facility}
             />
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <label style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--text-main)" }}>Notes / Clinical Summary</label>
+            <label htmlFor="record-status" style={fieldLabelStyle}>Status</label>
+            <select id="record-status" value={form.status} onChange={(event) => updateFormField("status", event.target.value)} style={selectStyle}>
+              {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <label htmlFor="record-summary" style={fieldLabelStyle}>Summary</label>
             <textarea
-              rows={3}
-              placeholder="Enter brief key findings or diagnostic summary..."
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.65rem 0.9rem",
-                fontSize: "0.9rem",
-                borderRadius: "0.65rem",
-                border: "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-main)",
-                color: "var(--text-main)",
-                outline: "none",
-                resize: "vertical"
-              }}
+              id="record-summary"
+              rows={4}
+              placeholder="Optional summary"
+              value={form.summary}
+              onChange={(event) => updateFormField("summary", event.target.value)}
+              maxLength={FIELD_LIMITS.summary}
+              style={{ ...selectStyle, resize: "vertical", lineHeight: 1.5 }}
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <Button variant="outline" size="md" onClick={() => setAddModalOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="md" disabled={submitting}>
-              {submitting ? "Saving..." : "Save to Vault"}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
+            <Button variant="outline" onClick={closeForm} disabled={submitting}>Cancel</Button>
+            <Button type="submit" variant="primary" disabled={submitting}>
+              {submitting ? "Saving..." : editingRecord ? "Save changes" : "Save record"}
             </Button>
           </div>
         </form>

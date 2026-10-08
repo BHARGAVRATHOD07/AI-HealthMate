@@ -1,10 +1,11 @@
-import { Eye, Trash2, Calendar, User, Building } from "lucide-react";
+import { Eye, Trash2, Calendar, User, Building, Pencil } from "lucide-react";
 
-const RecordCard = ({ record, onView, onDelete }) => {
+const RecordCard = ({ record, onView, onEdit, onDelete, deleting = false }) => {
   const categoryBadgeMap = {
     "Lab Report": { bg: "rgba(5, 150, 105, 0.12)", color: "#059669" },
     Prescription: { bg: "rgba(22, 163, 74, 0.12)", color: "#16A34A" },
-    "Medical Report": { bg: "rgba(99, 102, 241, 0.12)", color: "#6366f1" },
+    Imaging: { bg: "rgba(99, 102, 241, 0.12)", color: "#6366f1" },
+    "Doctor Note": { bg: "rgba(14, 165, 233, 0.12)", color: "#0284c7" },
     Vaccination: { bg: "rgba(16, 185, 129, 0.12)", color: "#10b981" },
     Other: { bg: "rgba(100, 116, 139, 0.12)", color: "#64748b" }
   };
@@ -29,18 +30,26 @@ const RecordCard = ({ record, onView, onDelete }) => {
     >
       <div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.75rem" }}>
-          <span
-            style={{
-              fontSize: "0.725rem",
-              fontWeight: "700",
-              padding: "0.25rem 0.65rem",
-              borderRadius: "9999px",
-              backgroundColor: badgeStyle.bg,
-              color: badgeStyle.color
-            }}
-          >
-            {record.category}
-          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <span
+              style={{
+                fontSize: "0.725rem",
+                fontWeight: "700",
+                padding: "0.25rem 0.65rem",
+                borderRadius: "9999px",
+                backgroundColor: badgeStyle.bg,
+                color: badgeStyle.color,
+                alignSelf: "flex-start"
+              }}
+            >
+              {record.category}
+            </span>
+            {record.status && (
+              <span style={{ fontSize: "0.7rem", color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {record.status}
+              </span>
+            )}
+          </div>
           <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.25rem" }}>
             <Calendar size={13} /> {record.date}
           </span>
@@ -50,9 +59,11 @@ const RecordCard = ({ record, onView, onDelete }) => {
           {record.title}
         </h4>
 
-        <p style={{ fontSize: "0.8375rem", color: "var(--text-muted)", lineHeight: 1.45, marginBottom: "0.75rem" }}>
-          {record.description}
-        </p>
+        {record.summary && (
+          <p style={{ fontSize: "0.8375rem", color: "var(--text-muted)", lineHeight: 1.45, marginBottom: "0.75rem", overflowWrap: "anywhere" }}>
+            {record.summary}
+          </p>
+        )}
 
         {(record.doctor || record.facility) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", fontSize: "0.78rem", color: "var(--text-subtle)" }}>
@@ -81,7 +92,7 @@ const RecordCard = ({ record, onView, onDelete }) => {
         }}
       >
         <span style={{ color: "var(--text-subtle)", fontWeight: "500" }}>
-          {record.fileType} • {record.fileSize}
+          {record.status}
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -103,22 +114,44 @@ const RecordCard = ({ record, onView, onDelete }) => {
           >
             <Eye size={14} /> View
           </button>
+          {onEdit && (
+            <button
+              onClick={() => onEdit(record)}
+              style={{
+                padding: "0.35rem",
+                borderRadius: "0.5rem",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "var(--bg-main)",
+                color: "var(--text-main)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center"
+              }}
+              title="Edit record"
+              aria-label={`Edit ${record.title}`}
+            >
+              <Pencil size={15} />
+            </button>
+          )}
           {onDelete && (
             <button
               onClick={() => onDelete(record.id)}
+              disabled={deleting}
               style={{
                 padding: "0.35rem",
                 borderRadius: "0.5rem",
                 border: "none",
                 backgroundColor: "transparent",
                 color: "var(--text-subtle)",
-                cursor: "pointer",
+                cursor: deleting ? "not-allowed" : "pointer",
+                opacity: deleting ? 0.55 : 1,
                 display: "flex",
                 alignItems: "center"
               }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-subtle)")}
               title="Delete record"
+              aria-label={`Delete ${record.title}`}
             >
               <Trash2 size={16} />
             </button>

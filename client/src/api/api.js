@@ -242,14 +242,25 @@ export const deleteReminder = async (id) => {
 };
 
 // ─── HEALTH RECORDS ──────────────────────────────────────────────────────────
-export const getRecords = async (category = "All", search = "") => {
+export const getRecords = async (category = "All", search = "", status = "All", sort = "newest") => {
   const params = new URLSearchParams();
   if (category && category !== "All") params.append("category", category);
   if (search) params.append("search", search);
+  if (status && status !== "All") params.append("status", status);
+  if (sort && sort !== "newest") params.append("sort", sort);
 
   const response = await fetch(`${API_URL}/api/records?${params.toString()}`, { headers: getAuthHeaders() });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to fetch records.");
+  return data;
+};
+
+export const getRecord = async (id) => {
+  const response = await fetch(`${API_URL}/api/records/${encodeURIComponent(id)}`, {
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to fetch health record.");
   return data;
 };
 
@@ -261,6 +272,17 @@ export const createRecord = async (recordData) => {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "Failed to add record.");
+  return data;
+};
+
+export const updateRecord = async (id, recordData) => {
+  const response = await fetch(`${API_URL}/api/records/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(recordData),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to update record.");
   return data;
 };
 
@@ -293,7 +315,9 @@ export default {
   toggleReminder,
   deleteReminder,
   getRecords,
+  getRecord,
   createRecord,
+  updateRecord,
   deleteRecord,
   getAuthHeaders,
   API_URL,
