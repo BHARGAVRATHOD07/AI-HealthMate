@@ -49,13 +49,25 @@ const formatUpdateTime = (value) => {
     : date.toLocaleDateString();
 };
 
-const getLatestVital = (vitals, type) =>
-  vitals
-    .filter((vital) => vital.type === type)
+const normalizeVitalType = (type) => {
+  const value = typeof type === "string" ? type.trim() : "";
+  if (!value) return "";
+
+  const lower = value.toLowerCase();
+  if (lower === "spo2" || lower === "oxygen" || lower === "oxygen level") return "Oxygen Level";
+  return value;
+};
+
+const getLatestVital = (vitals, type) => {
+  const normalizedType = normalizeVitalType(type);
+
+  return vitals
+    .filter((vital) => normalizeVitalType(vital.type) === normalizedType)
     .sort((a, b) =>
       new Date(b.loggedAt || b.createdAt || 0).getTime()
       - new Date(a.loggedAt || a.createdAt || 0).getTime()
     )[0];
+};
 
 const getReminderSortDate = (reminder) => {
   if (!reminder.date || reminder.date.toLowerCase() === "today") return 0;
@@ -110,7 +122,6 @@ const isReminderUpcoming = (reminder) => {
   return Boolean(date && date >= localDateKey());
 };
 
-
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -148,9 +159,17 @@ const Dashboard = () => {
       });
       setDashboardData(nextData);
     };
+
+    const handleVitalsUpdated = () => {
+      setRefreshKey((current) => current + 1);
+    };
+
     loadDashboardData();
+    window.addEventListener("vitals:updated", handleVitalsUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("vitals:updated", handleVitalsUpdated);
     };
   }, [refreshKey]);
 

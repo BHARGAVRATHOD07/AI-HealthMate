@@ -1,5 +1,15 @@
 const mongoose = require("mongoose");
 
+const allowedVitalTypes = [
+    "Blood Pressure",
+    "Heart Rate",
+    "Blood Sugar",
+    "Weight",
+    "Oxygen Level",
+    "SpO2",
+    "Temperature"
+];
+
 const vitalSchema = new mongoose.Schema(
     {
         user: {
@@ -10,7 +20,7 @@ const vitalSchema = new mongoose.Schema(
         type: {
             type: String,
             required: true,
-            enum: ["Blood Pressure", "Heart Rate", "Blood Sugar", "Weight", "Oxygen Level", "Temperature"]
+            enum: allowedVitalTypes
         },
         value: {
             type: String,
