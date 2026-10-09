@@ -83,7 +83,7 @@ const executeChatWithFallback = async (genAI, dynamicSystemInstruction, formatte
                 console.warn(`[Gemini Fallback] Model ${modelName} unavailable (${err.message}). Trying next model...`);
                 continue;
             }
-            // If it's an invalid key or safety violation, throw immediately
+            // If it's a structural or API key/safety error, throw immediately
             throw err;
         }
     }
@@ -135,7 +135,7 @@ const chat = async (req, res) => {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
         // Format prior history for Gemini startChat
-        const formattedHistory = Array.isArray(history)
+        let formattedHistory = Array.isArray(history)
             ? history
                 .filter(msg => msg.text && (msg.sender === "user" || msg.sender === "ai" || msg.sender === "bot" || msg.role))
                 .map(msg => ({
@@ -143,6 +143,14 @@ const chat = async (req, res) => {
                     parts: [{ text: msg.text }]
                 }))
             : [];
+
+        // Gemini API Requirement: First turn in history MUST have role: 'user'
+        const firstUserIdx = formattedHistory.findIndex(h => h.role === "user");
+        if (firstUserIdx > 0) {
+            formattedHistory = formattedHistory.slice(firstUserIdx);
+        } else if (firstUserIdx === -1) {
+            formattedHistory = [];
+        }
 
         // Execute chat call with multi-model fallback chain
         const { reply, modelUsed } = await executeChatWithFallback(genAI, dynamicSystemInstruction, formattedHistory, message);
