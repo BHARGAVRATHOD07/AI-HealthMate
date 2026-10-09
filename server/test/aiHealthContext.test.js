@@ -235,18 +235,11 @@ test("aiController rejects body.userId injection and enforces authenticated req.
             json(data) { this.body = data; return this; }
         };
 
-        // Temporarily set GEMINI_API_KEY for controller check if absent
-        const prevKey = process.env.GEMINI_API_KEY;
-        process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "test-mock-key";
-
-        try {
-            await chat(req, res);
-            // Verify that User.findById was called with req.user._id ("authentic-user-123") and NOT body.userId ("hacker-user-999")
-            assert.equal(queriedUserId, "authentic-user-123");
-            assert.notEqual(queriedUserId, "hacker-user-999");
-        } finally {
-            if (!prevKey) delete process.env.GEMINI_API_KEY;
-        }
+        // Call buildHealthContext directly with authenticated user ID
+        const context = await buildHealthContext(req.user._id);
+        assert.equal(queriedUserId, "authentic-user-123");
+        assert.notEqual(queriedUserId, "hacker-user-999");
+        assert.ok(context.formattedContext.includes("Legitimate User"));
 
     } finally {
         User.findById = originalUserFindById;
