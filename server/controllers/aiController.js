@@ -210,6 +210,99 @@ const chat = async (req, res) => {
     }
 };
 
+// Helper to format health measurements with units safely without duplication
+const formatMeasurementWithUnit = (value, unit) => {
+    if (value === null || value === undefined || value === "") return "";
+    const strVal = String(value).trim();
+    if (!unit || !String(unit).trim()) return strVal;
+    const cleanUnit = String(unit).trim();
+
+    const lowerVal = strVal.toLowerCase();
+    const lowerUnit = cleanUnit.toLowerCase();
+
+    // Avoid duplicate units if value already contains or ends with the unit
+    if (lowerVal.endsWith(lowerUnit) || lowerVal.endsWith(` ${lowerUnit}`)) {
+        return strVal;
+    }
+    if (lowerUnit === "bpm" && lowerVal.includes("bpm")) return strVal;
+    if (lowerUnit === "mmhg" && lowerVal.includes("mmhg")) return strVal;
+    if (lowerUnit === "kg" && (lowerVal.endsWith("kg") || lowerVal.endsWith("kilograms"))) return strVal;
+    if (lowerUnit === "cm" && lowerVal.endsWith("cm")) return strVal;
+    if (cleanUnit === "%" && strVal.endsWith("%")) return strVal;
+
+    return `${strVal} ${cleanUnit}`;
+};
+
+const formatProfileHeight = (val) => {
+    if (!val || typeof val !== "string" || !val.trim()) return "Not recorded";
+    const trimmed = val.trim();
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+        return `${trimmed} cm`;
+    }
+    return trimmed;
+};
+
+const formatProfileWeight = (val) => {
+    if (!val || typeof val !== "string" || !val.trim()) return "Not recorded";
+    const trimmed = val.trim();
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+        return `${trimmed} kg`;
+    }
+    return trimmed;
+};
+
+const categorizeReminders = (remindersList) => {
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const getReminderDateKey = (dateVal) => {
+        if (!dateVal) return todayKey;
+        const lower = String(dateVal).trim().toLowerCase();
+        if (lower === "today") return todayKey;
+        if (lower === "tomorrow") {
+            const tom = new Date();
+            tom.setDate(tom.getDate() + 1);
+            return `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, "0")}-${String(tom.getDate()).padStart(2, "0")}`;
+        }
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateVal)) return String(dateVal).slice(0, 10);
+        const parsed = new Date(dateVal);
+        if (!isNaN(parsed.getTime())) {
+            return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+        }
+        return null;
+    };
+
+    const upcoming = [];
+    const pastDue = [];
+    const completed = [];
+
+    (remindersList || []).forEach(r => {
+        const item = {
+            title: r.title,
+            category: r.category,
+            date: r.date,
+            time: r.time,
+            repeat: r.repeat || "Once",
+            completed: Boolean(r.completed),
+            notes: r.notes || ""
+        };
+
+        if (r.completed) {
+            completed.push(item);
+        } else {
+            const isRecurring = r.repeat && r.repeat !== "Once";
+            const dateKey = getReminderDateKey(r.date);
+            if (isRecurring || (dateKey && dateKey >= todayKey)) {
+                upcoming.push(item);
+            } else {
+                pastDue.push(item);
+            }
+        }
+    });
+
+    return { upcoming, pastDue, completed };
+};
+
 // ─── POST /api/ai/health-summary ──────────────────────────────────────────────
 const getHealthSummary = async (req, res) => {
     try {
@@ -246,6 +339,9 @@ const getHealthSummary = async (req, res) => {
                         age: "Not recorded",
                         gender: "Not recorded",
                         height: "Not recorded",
+                        profileWeight: "Not recorded",
+                        latestRecordedWeight: "None recorded",
+                        latestWeightLoggedAt: null,
                         weight: "Not recorded",
                         bloodGroup: "Not recorded"
                     },
@@ -254,6 +350,8 @@ const getHealthSummary = async (req, res) => {
                     recentRecords: [],
                     activeMedications: [],
                     upcomingReminders: [],
+                    pastDueReminders: [],
+                    completedRecently: [],
                     observations: [],
                     missingInformation: [
                         "No vital readings recorded yet (weight, blood pressure, heart rate, etc.)",
@@ -267,12 +365,22 @@ const getHealthSummary = async (req, res) => {
         }
 
         // SECTION A: Authoritative Facts directly from MongoDB
+        const latestWeightObj = latestVitalsByType["Weight"] || null;
+        const profileWeightFormatted = formatProfileWeight(hp.weight);
+        const latestWeightFormatted = latestWeightObj
+            ? formatMeasurementWithUnit(latestWeightObj.value, latestWeightObj.unit)
+            : "None recorded";
+        const latestWeightLoggedAt = latestWeightObj ? latestWeightObj.loggedAt : null;
+
         const profileOverview = {
             name: user.name || "User",
             age: age !== null ? `${age} years` : (hp.dateOfBirth || "Not recorded"),
             gender: hp.gender || "Not recorded",
-            height: hp.height || "Not recorded",
-            weight: hp.weight || "Not recorded",
+            height: formatProfileHeight(hp.height),
+            profileWeight: profileWeightFormatted,
+            latestRecordedWeight: latestWeightFormatted,
+            latestWeightLoggedAt,
+            weight: profileWeightFormatted, // preserved for backwards compatibility
             bloodGroup: hp.bloodGroup || "Not recorded",
             allergies: hp.allergies || "None recorded",
             existingConditions: hp.existingConditions || "None recorded"
@@ -280,7 +388,8 @@ const getHealthSummary = async (req, res) => {
 
         const latestVitalsList = Object.values(latestVitalsByType).map(v => ({
             type: v.type,
-            value: `${v.value} ${v.unit}`,
+            value: formatMeasurementWithUnit(v.value, v.unit),
+            rawUnit: v.unit,
             status: v.status,
             loggedAt: v.loggedAt
         }));
@@ -300,12 +409,13 @@ const getHealthSummary = async (req, res) => {
                 const toPart = newestDate ? ` on ${newestDate}` : "";
                 trendsList.push({
                     metric: metricName,
-                    description: `Your recorded ${metricName.toLowerCase()} changed from ${oldest.value} ${oldest.unit}${fromPart} to ${newest.value} ${newest.unit}${toPart}.`
+                    description: `Your recorded ${metricName.toLowerCase()} changed from ${formatMeasurementWithUnit(oldest.value, oldest.unit)}${fromPart} to ${formatMeasurementWithUnit(newest.value, newest.unit)}${toPart}.`
                 });
             } else if (latestVitalsByType[metricName]) {
+                const v = latestVitalsByType[metricName];
                 trendsList.push({
                     metric: metricName,
-                    description: `Only one ${metricName.toLowerCase()} reading is available, so a trend cannot yet be determined.`
+                    description: `Only one ${metricName.toLowerCase()} reading (${formatMeasurementWithUnit(v.value, v.unit)}) is available, so a trend cannot yet be determined.`
                 });
             }
         });
@@ -374,6 +484,8 @@ Respond ONLY with valid JSON in this exact structure:
             if (!hp.allergies) missingItems.push("Allergies are not specified in your profile.");
         }
 
+        const { upcoming: upcomingList, pastDue: pastDueList, completed: completedList } = categorizeReminders(upcomingReminders);
+
         res.status(200).json({
             success: true,
             data: {
@@ -397,13 +509,9 @@ Respond ONLY with valid JSON in this exact structure:
                     timing: m.timing,
                     instructions: m.instructions
                 })),
-                upcomingReminders: upcomingReminders.map(rem => ({
-                    title: rem.title,
-                    category: rem.category,
-                    date: rem.date,
-                    time: rem.time,
-                    completed: rem.completed
-                })),
+                upcomingReminders: upcomingList,
+                pastDueReminders: pastDueList,
+                completedRecently: completedList,
                 observations: aiObservations,
                 missingInformation: missingItems,
                 disclaimer: "AI HealthMate provides informational summaries based on user-recorded data and does not replace professional medical diagnosis or clinical advice. Always consult your healthcare provider for medical concerns."

@@ -289,12 +289,21 @@ const AIHealthSummaryCard = () => {
                     <div style={{ fontSize: "0.85rem", fontWeight: "750", color: "var(--text-main)", marginBottom: "0.6rem" }}>
                       Your Health Profile
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.65rem", fontSize: "0.82rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.65rem", fontSize: "0.82rem" }}>
                       <div><span style={{ color: "var(--text-muted)" }}>Name:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.name}</strong></div>
                       <div><span style={{ color: "var(--text-muted)" }}>Age:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.age}</strong></div>
                       <div><span style={{ color: "var(--text-muted)" }}>Gender:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.gender}</strong></div>
                       <div><span style={{ color: "var(--text-muted)" }}>Height:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.height}</strong></div>
-                      <div><span style={{ color: "var(--text-muted)" }}>Weight:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.weight}</strong></div>
+                      <div><span style={{ color: "var(--text-muted)" }}>Profile Weight:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.profileWeight || summary.profileOverview.weight}</strong></div>
+                      <div>
+                        <span style={{ color: "var(--text-muted)" }}>Latest Recorded Weight:</span>{" "}
+                        <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.latestRecordedWeight || "None recorded"}</strong>
+                        {summary.profileOverview.latestWeightLoggedAt && (
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-subtle)", display: "block" }}>
+                            ({formatTimestamp(summary.profileOverview.latestWeightLoggedAt)})
+                          </span>
+                        )}
+                      </div>
                       <div><span style={{ color: "var(--text-muted)" }}>Blood Group:</span> <strong style={{ color: "var(--text-main)" }}>{summary.profileOverview.bloodGroup}</strong></div>
                     </div>
                   </div>
@@ -311,7 +320,10 @@ const AIHealthSummaryCard = () => {
                         <div key={i} style={{ padding: "0.7rem 0.85rem", borderRadius: "0.75rem", border: "1px solid var(--border-color)", background: "var(--bg-card)" }}>
                           <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>{v.type}</div>
                           <div style={{ fontSize: "1rem", fontWeight: "800", color: "#16A34A", marginTop: "0.15rem" }}>{v.value}</div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-subtle)", marginTop: "0.1rem" }}>Status: {v.status}</div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-subtle)", marginTop: "0.1rem" }}>
+                            Status: {v.status}
+                            {v.loggedAt ? ` • ${formatTimestamp(v.loggedAt)}` : ""}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -332,7 +344,7 @@ const AIHealthSummaryCard = () => {
                   </div>
                 )}
 
-                {/* Active Medications, Records, and Upcoming Reminders Grid */}
+                {/* Active Medications, Records, and Reminders Grid */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.75rem" }}>
                   {/* Medications */}
                   <div style={{ padding: "0.85rem 1rem", borderRadius: "0.75rem", border: "1px solid var(--border-color)", background: "var(--bg-card)" }}>
@@ -374,13 +386,48 @@ const AIHealthSummaryCard = () => {
                     {summary.upcomingReminders && summary.upcomingReminders.length > 0 ? (
                       <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.82rem", color: "var(--text-main)", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                         {summary.upcomingReminders.map((rem, idx) => (
-                          <li key={idx}><strong>{rem.title}</strong> ({rem.category}) — {rem.date} at {rem.time} {rem.completed ? "(Completed)" : ""}</li>
+                          <li key={idx}>
+                            <strong>{rem.title}</strong> ({rem.category}) — {rem.date} at {rem.time}
+                            {rem.repeat && rem.repeat !== "Once" ? ` • ${rem.repeat}` : ""}
+                          </li>
                         ))}
                       </ul>
                     ) : (
                       <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>No upcoming health reminders scheduled.</div>
                     )}
                   </div>
+
+                  {/* Past-Due Incomplete Reminders (if any) */}
+                  {summary.pastDueReminders && summary.pastDueReminders.length > 0 && (
+                    <div style={{ padding: "0.85rem 1rem", borderRadius: "0.75rem", border: "1px solid rgba(245, 158, 11, 0.3)", background: "rgba(245, 158, 11, 0.05)" }}>
+                      <div style={{ fontSize: "0.85rem", fontWeight: "750", color: "#d97706", marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <AlertCircle size={16} color="#d97706" /> Past-Due Reminders
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.82rem", color: "var(--text-main)", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        {summary.pastDueReminders.map((rem, idx) => (
+                          <li key={idx}>
+                            <strong>{rem.title}</strong> ({rem.category}) — Due: {rem.date} at {rem.time} (Past due)
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Completed Recently (if any) */}
+                  {summary.completedRecently && summary.completedRecently.length > 0 && (
+                    <div style={{ padding: "0.85rem 1rem", borderRadius: "0.75rem", border: "1px solid var(--border-color)", background: "var(--bg-card-alt)" }}>
+                      <div style={{ fontSize: "0.85rem", fontWeight: "750", color: "var(--text-main)", marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <CheckCircle2 size={16} color="#16A34A" /> Completed Recently
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        {summary.completedRecently.map((rem, idx) => (
+                          <li key={idx}>
+                            <span style={{ textDecoration: "line-through", color: "var(--text-muted)" }}><strong>{rem.title}</strong> ({rem.category}) — {rem.date} at {rem.time}</span> <span style={{ color: "#16A34A", fontSize: "0.75rem", fontWeight: "600" }}>(Completed)</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
 

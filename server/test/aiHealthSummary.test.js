@@ -758,3 +758,411 @@ test("16. Cross-user isolation: User A data never leaks into User B summary", as
         Reminder.find = originalReminderFind;
     }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 7.1 ACCURACY AND PRESENTATION TESTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── 17. Profile weight differing from latest recorded weight ─────────────────
+test("17. Profile weight differs from latest recorded weight without overwriting either value", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({
+                    _id: userId,
+                    name: "Weight Compare User",
+                    healthProfile: { height: "175", weight: "72" } // Profile baseline weight 72 (numeric without unit)
+                })
+            })
+        });
+
+        const loggedDate = new Date("2026-10-10T09:00:00.000Z");
+        Vital.find = () => ({
+            sort: () => ({
+                limit: () => ({
+                    select: () => ({
+                        lean: async () => [
+                            { type: "Weight", value: "68.5", unit: "kg", status: "Normal", loggedAt: loggedDate }
+                        ]
+                    })
+                })
+            })
+        });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Reminder.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.success, true);
+
+        // Check Profile Baseline Weight is 72 kg
+        assert.equal(res.body.data.profileOverview.profileWeight, "72 kg");
+
+        // Check Latest Recorded Weight is 68.5 kg with loggedAt preserved
+        assert.equal(res.body.data.profileOverview.latestRecordedWeight, "68.5 kg");
+        assert.equal(new Date(res.body.data.profileOverview.latestWeightLoggedAt).getTime(), loggedDate.getTime());
+
+        // Verify neither value overwrote the other
+        assert.notEqual(res.body.data.profileOverview.profileWeight, res.body.data.profileOverview.latestRecordedWeight);
+
+        // Verify latest vitals array also retains 68.5 kg
+        const weightVital = res.body.data.latestVitals.find(v => v.type === "Weight");
+        assert.ok(weightVital);
+        assert.equal(weightVital.value, "68.5 kg");
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
+// ─── 18. Completed reminders excluded from upcoming reminders ─────────────────
+test("18. Completed reminders are excluded from upcomingReminders and placed in completedRecently", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({ _id: userId, name: "Reminder User", healthProfile: { height: "170 cm" } })
+            })
+        });
+        Vital.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        // Reminder marked completed
+        Reminder.find = () => ({
+            sort: () => ({
+                limit: () => ({
+                    select: () => ({
+                        lean: async () => [
+                            { title: "Finished Lab Test", category: "Lab Test", date: "2026-10-25", time: "10:00 AM", repeat: "Once", completed: true }
+                        ]
+                    })
+                })
+            })
+        });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+
+        // Must NOT appear in upcomingReminders
+        assert.equal(res.body.data.upcomingReminders.length, 0);
+
+        // MUST appear in completedRecently
+        assert.equal(res.body.data.completedRecently.length, 1);
+        assert.equal(res.body.data.completedRecently[0].title, "Finished Lab Test");
+        assert.equal(res.body.data.completedRecently[0].completed, true);
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
+// ─── 19. Future incomplete reminders displayed correctly ──────────────────────
+test("19. Future incomplete reminders are displayed correctly in upcomingReminders", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({ _id: userId, name: "Future Reminder User", healthProfile: { height: "170 cm" } })
+            })
+        });
+        Vital.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        const futureYear = new Date().getFullYear() + 1;
+        Reminder.find = () => ({
+            sort: () => ({
+                limit: () => ({
+                    select: () => ({
+                        lean: async () => [
+                            { title: "Future Cardiology Appointment", category: "Appointment", date: `${futureYear}-06-15`, time: "11:00 AM", repeat: "Once", completed: false }
+                        ]
+                    })
+                })
+            })
+        });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+
+        assert.equal(res.body.data.upcomingReminders.length, 1);
+        assert.equal(res.body.data.upcomingReminders[0].title, "Future Cardiology Appointment");
+        assert.equal(res.body.data.upcomingReminders[0].completed, false);
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
+// ─── 20. Past-due incomplete reminders handled consistently ───────────────────
+test("20. Past-due incomplete reminders are handled consistently in pastDueReminders", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({ _id: userId, name: "Past-Due User", healthProfile: { height: "170 cm" } })
+            })
+        });
+        Vital.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        Reminder.find = () => ({
+            sort: () => ({
+                limit: () => ({
+                    select: () => ({
+                        lean: async () => [
+                            { title: "Missed Medication Dose", category: "Medication", date: "2020-01-01", time: "08:00 AM", repeat: "Once", completed: false }
+                        ]
+                    })
+                })
+            })
+        });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+
+        // One-time past incomplete reminder must NOT be upcoming
+        assert.equal(res.body.data.upcomingReminders.length, 0);
+
+        // Must be in pastDueReminders
+        assert.equal(res.body.data.pastDueReminders.length, 1);
+        assert.equal(res.body.data.pastDueReminders[0].title, "Missed Medication Dose");
+        assert.equal(res.body.data.pastDueReminders[0].completed, false);
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
+// ─── 21. Recurring reminders handled according to rules ───────────────────────
+test("21. Recurring reminders (repeat: 'Daily' / 'Weekly') are included as active upcoming schedules", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({ _id: userId, name: "Recurring User", healthProfile: { height: "170 cm" } })
+            })
+        });
+        Vital.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        // Recurring reminder created earlier but active daily
+        Reminder.find = () => ({
+            sort: () => ({
+                limit: () => ({
+                    select: () => ({
+                        lean: async () => [
+                            { title: "Daily Morning Blood Pressure Check", category: "Vitals Check", date: "2024-01-01", time: "07:30 AM", repeat: "Daily", completed: false }
+                        ]
+                    })
+                })
+            })
+        });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+
+        // Recurring reminders must NOT be hidden in past-due; they are active upcoming schedules
+        assert.equal(res.body.data.upcomingReminders.length, 1);
+        assert.equal(res.body.data.upcomingReminders[0].title, "Daily Morning Blood Pressure Check");
+        assert.equal(res.body.data.upcomingReminders[0].repeat, "Daily");
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
+// ─── 22. Missing and pre-existing units handled safely ────────────────────────
+test("22. Missing units and pre-existing units are formatted safely without duplicate suffix", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({
+                    _id: userId,
+                    name: "Unit Test User",
+                    healthProfile: { height: "180 cm", weight: "75 kg" } // Already includes units
+                })
+            })
+        });
+
+        Vital.find = () => ({
+            sort: () => ({
+                limit: () => ({
+                    select: () => ({
+                        lean: async () => [
+                            { type: "Blood Pressure", value: "120/80 mmHg", unit: "mmHg", status: "Normal", loggedAt: new Date() }, // value already has unit
+                            { type: "Heart Rate", value: "72", unit: "BPM", status: "Normal", loggedAt: new Date() },
+                            { type: "Temperature", value: "98.6", unit: "", status: "Normal", loggedAt: new Date() } // missing unit
+                        ]
+                    })
+                })
+            })
+        });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Reminder.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+
+        // Profile height and weight must not have double units like "180 cm cm"
+        assert.equal(res.body.data.profileOverview.height, "180 cm");
+        assert.equal(res.body.data.profileOverview.profileWeight, "75 kg");
+
+        // Blood pressure must NOT have double unit "120/80 mmHg mmHg"
+        const bpVital = res.body.data.latestVitals.find(v => v.type === "Blood Pressure");
+        assert.ok(bpVital);
+        assert.equal(bpVital.value, "120/80 mmHg");
+
+        // Missing unit must not output "98.6 undefined"
+        const tempVital = res.body.data.latestVitals.find(v => v.type === "Temperature");
+        assert.ok(tempVital);
+        assert.equal(tempVital.value, "98.6");
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
+// ─── 23. Empty reminder state handled cleanly ─────────────────────────────────
+test("23. Empty reminder state returns empty lists cleanly across all categories", async () => {
+    const userId = new mongoose.Types.ObjectId().toString();
+    const originalUserFindById = User.findById;
+    const originalVitalFind = Vital.find;
+    const originalRecordFind = Record.find;
+    const originalMedicationFind = Medication.find;
+    const originalReminderFind = Reminder.find;
+
+    setCustomChatExecutorForTesting(defaultMockGemini);
+
+    try {
+        User.findById = () => ({
+            select: () => ({
+                lean: async () => ({ _id: userId, name: "No Reminders User", healthProfile: { height: "170 cm" } })
+            })
+        });
+        Vital.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Record.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Medication.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+        Reminder.find = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+
+        const req = { user: { _id: userId } };
+        const res = createMockRes();
+
+        await getHealthSummary(req, res);
+        assert.equal(res.statusCode, 200);
+
+        assert.ok(Array.isArray(res.body.data.upcomingReminders));
+        assert.equal(res.body.data.upcomingReminders.length, 0);
+
+        assert.ok(Array.isArray(res.body.data.pastDueReminders));
+        assert.equal(res.body.data.pastDueReminders.length, 0);
+
+        assert.ok(Array.isArray(res.body.data.completedRecently));
+        assert.equal(res.body.data.completedRecently.length, 0);
+    } finally {
+        setCustomChatExecutorForTesting(null);
+        User.findById = originalUserFindById;
+        Vital.find = originalVitalFind;
+        Record.find = originalRecordFind;
+        Medication.find = originalMedicationFind;
+        Reminder.find = originalReminderFind;
+    }
+});
+
