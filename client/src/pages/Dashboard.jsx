@@ -17,6 +17,7 @@ import { useAuth } from "../context/AuthContext";
 import DashboardLayout from "../layout/DashboardLayout";
 import Card from "../components/common/Card";
 import Button from "../components/common/Button";
+import AIHealthSummaryCard from "../components/AIHealthSummaryCard";
 import HealthCard from "../components/cards/HealthCard";
 import ReminderCard from "../components/cards/ReminderCard";
 import EmptyState from "../components/common/EmptyState";
@@ -330,6 +331,9 @@ const Dashboard = () => {
           <Button variant="primary" size="md" icon={Plus} onClick={() => navigate("/monitoring")}>Add Health Reading</Button>
         </div>
       </section>
+
+      {/* Phase 7: Personalized AI Health Summary Section */}
+      <AIHealthSummaryCard />
 
       <div className="dashboard-overview-grid" style={{ gap: "1.25rem", marginBottom: "1.5rem" }}>
         <Card title="Profile Summary" subtitle="Your saved personal health details" icon={UserRound}

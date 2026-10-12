@@ -54,11 +54,18 @@ const buildHealthContext = async (userId) => {
 
     // Map latest reading per vital type
     const latestVitalsByType = {};
+    const vitalHistoryByType = {};
     const weightHistory = [];
 
     recentVitals.forEach(v => {
         if (!latestVitalsByType[v.type]) {
             latestVitalsByType[v.type] = v;
+        }
+        if (!vitalHistoryByType[v.type]) {
+            vitalHistoryByType[v.type] = [];
+        }
+        if (vitalHistoryByType[v.type].length < 5) {
+            vitalHistoryByType[v.type].push(v);
         }
         if (v.type === "Weight" && weightHistory.length < 5) {
             weightHistory.push(v);
@@ -179,6 +186,7 @@ const buildHealthContext = async (userId) => {
         rawData: {
             user,
             latestVitalsByType,
+            vitalHistoryByType,
             weightHistory,
             recentRecords,
             activeMedications,

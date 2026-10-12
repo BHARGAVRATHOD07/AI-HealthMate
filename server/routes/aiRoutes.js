@@ -1,10 +1,10 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
-const { chat } = require("../controllers/aiController");
+const { chat, getHealthSummary } = require("../controllers/aiController");
 const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
-const aiChatLimiter = rateLimit({
+const aiLimiter = rateLimit({
     windowMs: 60 * 1000,
     limit: 20,
     keyGenerator: (req) => req.user._id.toString(),
@@ -12,12 +12,15 @@ const aiChatLimiter = rateLimit({
     legacyHeaders: false,
     message: {
         success: false,
-        message: "AI assistant request limit reached. Wait a minute and try again."
+        message: "AI request limit reached. Wait a minute and try again."
     }
 });
 
 // POST /api/ai/chat — protected, requires valid JWT
 // Body: { message: string, history: Array<{ sender: "user"|"ai", text: string }> }
-router.post("/chat", protect, aiChatLimiter, chat);
+router.post("/chat", protect, aiLimiter, chat);
+
+// POST /api/ai/health-summary — protected, requires valid JWT
+router.post("/health-summary", protect, aiLimiter, getHealthSummary);
 
 module.exports = router;

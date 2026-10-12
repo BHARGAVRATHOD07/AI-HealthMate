@@ -121,6 +121,21 @@ export const sendAIMessage = async (message, history = []) => {
   return data;
 };
 
+/**
+ * Fetch a personalized AI Health Summary.
+ * Endpoint: POST /api/ai/health-summary (requires JWT)
+ */
+export const getHealthSummary = async () => {
+  const response = await fetch(`${API_URL}/api/ai/health-summary`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to generate health summary.");
+  return data;
+};
+
+
 // ─── VITALS ──────────────────────────────────────────────────────────────────
 export const getVitals = async (type) => {
   const url = type ? `${API_URL}/api/vitals?type=${encodeURIComponent(type)}` : `${API_URL}/api/vitals`;
@@ -314,6 +329,7 @@ export default {
   loginUser,
   getAuthenticatedUser,
   sendAIMessage,
+  getHealthSummary,
   getVitals,
   createVital,
   deleteVital,

@@ -1,0 +1,14 @@
+{
+  "name": "ai-healthmate",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-HealthMate - Smart Health Monitoring & Assistant",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "test:server": "npm --prefix server test"
+  }
+}
