@@ -121,6 +121,78 @@ export const sendAIMessage = async (message, history = []) => {
   return data;
 };
 
+export const sendPersistentAIMessage = async (message, conversationId, requestId) => {
+  if (!requestId) throw new Error("A request ID is required to send a persistent message.");
+  const response = await fetch(`${API_URL}/api/ai/chat`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message, conversationId, requestId }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.message || "AI service error.");
+    error.status = response.status;
+    error.data = data.data;
+    throw error;
+  }
+  return data;
+};
+
+export const createConversation = async () => {
+  const response = await fetch(`${API_URL}/api/ai/conversations`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({}),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not create a conversation.");
+  return data;
+};
+
+export const listConversations = async ({ cursor, limit = 20 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  const response = await fetch(`${API_URL}/api/ai/conversations?${params}`, {
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not load conversations.");
+  return data;
+};
+
+export const getConversationMessages = async (conversationId, { cursor, limit = 50 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  const response = await fetch(
+    `${API_URL}/api/ai/conversations/${encodeURIComponent(conversationId)}/messages?${params}`,
+    { headers: getAuthHeaders() }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not load conversation messages.");
+  return data;
+};
+
+export const renameConversation = async (conversationId, title) => {
+  const response = await fetch(`${API_URL}/api/ai/conversations/${encodeURIComponent(conversationId)}`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ title }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not rename the conversation.");
+  return data;
+};
+
+export const deleteConversation = async (conversationId) => {
+  const response = await fetch(`${API_URL}/api/ai/conversations/${encodeURIComponent(conversationId)}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Could not delete the conversation.");
+  return data;
+};
+
 /**
  * Fetch a personalized AI Health Summary.
  * Endpoint: POST /api/ai/health-summary (requires JWT)
