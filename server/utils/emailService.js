@@ -1,6 +1,7 @@
 const dns = require("dns");
 const net = require("net");
 const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 const getSmtpConfig = () => {
     const required = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"];
@@ -35,6 +36,13 @@ const getSmtpConfig = () => {
         },
         from: process.env.SMTP_FROM || process.env.SMTP_USER
     };
+};
+
+const validateEmailConfig = () => {
+    if (process.env.RESEND_API_KEY) {
+        return { provider: "resend" };
+    }
+    return getSmtpConfig();
 };
 
 /**
@@ -75,7 +83,46 @@ const resolveIPv4 = (hostname) =>
         });
     });
 
+const sendViaResend = async (apiKey, from, email, code) => {
+    const resend = new Resend(apiKey);
+    const subject = "Your AI HealthMate password reset code";
+    const text = `Your password reset code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`;
+    const html = `
+    <div style="font-family:Arial,sans-serif;color:#0f172a;max-width:520px;margin:0 auto;padding:24px">
+      <div style="border:1px solid #dcfce7;border-radius:16px;padding:28px;background:#ffffff">
+        <p style="color:#059669;font-weight:700;margin:0 0 12px">AI HealthMate</p>
+        <h1 style="font-size:22px;margin:0 0 12px">Reset your password</h1>
+        <p style="color:#64748b;line-height:1.6">Use this one-time code to reset your password. It expires in 10 minutes.</p>
+        <p style="font-size:32px;letter-spacing:8px;font-weight:700;color:#16a34a;margin:24px 0">${code}</p>
+        <p style="font-size:13px;color:#64748b">If you did not request a password reset, you can safely ignore this email.</p>
+      </div>
+    </div>
+    `;
+
+    const { data, error } = await resend.emails.send({
+        from,
+        to: email,
+        subject,
+        text,
+        html
+    });
+
+    if (error) {
+        const err = new Error(error.message || "Failed to send email via Resend.");
+        err.code = error.name || "RESEND_DELIVERY_FAILED";
+        throw err;
+    }
+
+    return data;
+};
+
 const sendPasswordResetOtp = async (email, code) => {
+    // If RESEND_API_KEY is configured, prioritize Resend HTTPS delivery (cloud-ready, port-safe)
+    if (process.env.RESEND_API_KEY) {
+        const from = process.env.RESEND_FROM || "AI HealthMate <onboarding@resend.dev>";
+        return await sendViaResend(process.env.RESEND_API_KEY, from, email, code);
+    }
+
     const config = getSmtpConfig();
 
     let resolvedHost;
@@ -131,4 +178,5 @@ const sendPasswordResetOtp = async (email, code) => {
     }
 };
 
-module.exports = { getSmtpConfig, resolveIPv4, sendPasswordResetOtp };
+module.exports = { getSmtpConfig, validateEmailConfig, resolveIPv4, sendPasswordResetOtp };
+

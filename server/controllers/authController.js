@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
 const PasswordResetOtp = require("../models/PasswordResetOtp");
-const { getSmtpConfig, sendPasswordResetOtp } = require("../utils/emailService");
+const { getSmtpConfig, validateEmailConfig, sendPasswordResetOtp } = require("../utils/emailService");
 const { logInternalError } = require("../utils/errorLogging");
 
 const PASSWORD_RESET_OTP_TTL_MS = 10 * 60 * 1000;
@@ -37,7 +37,7 @@ const requestPasswordReset = async (req, res) => {
     }
 
     try {
-        getSmtpConfig();
+        validateEmailConfig();
         getPasswordResetOtpSecret();
     } catch (error) {
         return res.status(503).json({
