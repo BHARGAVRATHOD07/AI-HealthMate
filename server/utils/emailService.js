@@ -1,3 +1,5 @@
+const dns = require("dns");
+const net = require("net");
 const nodemailer = require("nodemailer");
 
 const getSmtpConfig = () => {
@@ -35,13 +37,49 @@ const getSmtpConfig = () => {
     };
 };
 
+/**
+ * Resolves a hostname to an IPv4 address via dns.lookup with family:4.
+ * Returns the original hostname if it is already an IP literal or if
+ * IPv4 resolution fails, so the caller can surface the real error.
+ *
+ * @param {string} hostname
+ * @returns {Promise<string>} IPv4 address or original hostname
+ */
+const resolveIPv4 = (hostname) =>
+    new Promise((resolve) => {
+        if (net.isIP(hostname)) {
+            return resolve(hostname);
+        }
+        dns.lookup(hostname, { family: 4 }, (err, address) => {
+            resolve(!err && address ? address : hostname);
+        });
+    });
+
 const sendPasswordResetOtp = async (email, code) => {
     const config = getSmtpConfig();
+
+    // Pre-resolve the SMTP hostname to a guaranteed IPv4 address before
+    // creating the transporter. nodemailer v10 resolves both A and AAAA
+    // records and picks an address at random from the combined list. On
+    // dual-stack hosts where outbound IPv6 is blocked (Render free tier),
+    // this produces intermittent ENETUNREACH / ESOCKET failures. Passing a
+    // raw IPv4 literal causes nodemailer to skip its own DNS resolution and
+    // connect directly, eliminating the IPv6 code path entirely.
+    const resolvedHost = await resolveIPv4(config.host);
+
     const transporter = nodemailer.createTransport({
-        host: config.host,
+        host: resolvedHost,
         port: config.port,
         secure: config.secure,
-        auth: config.auth
+        // Preserve the original hostname as the TLS servername so SNI and
+        // certificate verification still work when connecting to a raw IP.
+        tls: { servername: config.host },
+        auth: config.auth,
+        // Conservative timeouts so a stalled connection does not keep the
+        // HTTP response — and the user's loading spinner — hanging forever.
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout:   15000
     });
 
     await transporter.sendMail({
