@@ -34,7 +34,7 @@ const loginLimiter = rateLimit({
 });
 const passwordResetLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 5,
+    limit: process.env.NODE_ENV === "production" ? 15 : 60,
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: {
@@ -44,7 +44,7 @@ const passwordResetLimiter = rateLimit({
 });
 const passwordResetVerifyLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 10,
+    limit: process.env.NODE_ENV === "production" ? 25 : 100,
     standardHeaders: "draft-8",
     legacyHeaders: false,
     message: {

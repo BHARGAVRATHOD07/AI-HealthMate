@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Activity, Mail, Lock, Eye, EyeOff, ArrowRight, KeyRound } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Activity, Mail, Lock, Eye, EyeOff, ArrowRight, KeyRound, CheckCircle2, ExternalLink } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { requestPasswordResetOtp, resetPasswordWithOtp } from "../api/api";
 import Input from "../components/common/Input";
@@ -11,6 +11,7 @@ import Toast from "../components/common/Toast";
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,6 +21,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("info");
 
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
   const [recoveryStep, setRecoveryStep] = useState("request");
@@ -27,6 +29,8 @@ const Login = () => {
   const [recoveryCode, setRecoveryCode] = useState("");
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState("");
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+  const [showRecoveryConfirm, setShowRecoveryConfirm] = useState(false);
   const [recoveryError, setRecoveryError] = useState("");
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [recoveryLoading, setRecoveryLoading] = useState(false);
@@ -44,6 +48,8 @@ const Login = () => {
     setRecoveryCode("");
     setRecoveryPassword("");
     setRecoveryPasswordConfirm("");
+    setShowRecoveryPassword(false);
+    setShowRecoveryConfirm(false);
     setRecoveryError("");
     setRecoveryMessage("");
     setResendSeconds(0);
@@ -57,14 +63,21 @@ const Login = () => {
   };
 
   const handleRequestOtp = async (event) => {
-    event.preventDefault();
+    event?.preventDefault?.();
     setRecoveryError("");
+    const trimmed = recoveryEmail.trim().toLowerCase();
+    if (!trimmed) {
+      setRecoveryError("Please enter your email address.");
+      return;
+    }
     setRecoveryLoading(true);
     try {
-      const result = await requestPasswordResetOtp(recoveryEmail.trim());
+      const result = await requestPasswordResetOtp(trimmed);
       setRecoveryMessage(result.message);
       setRecoveryStep("reset");
       setResendSeconds(60);
+      setToastType("info");
+      setToastMessage("Verification code sent to your email.");
     } catch (error) {
       setRecoveryError(error.message);
     } finally {
@@ -92,8 +105,10 @@ const Login = () => {
         recoveryPassword
       );
       setForgotModalOpen(false);
-      setToastMessage(result.message);
+      setEmail("");
       setPassword("");
+      setToastType("success");
+      setToastMessage(result.message || "Your password has been reset! You can now log in.");
       setRecoveryCode("");
       setRecoveryPassword("");
       setRecoveryPasswordConfirm("");
@@ -147,7 +162,7 @@ const Login = () => {
         background: "radial-gradient(circle at top, rgba(22, 163, 74, 0.13), transparent 30%), linear-gradient(180deg, var(--bg-main), rgba(22, 163, 74, 0.04))"
       }}
     >
-      <Toast message={toastMessage} onClose={() => setToastMessage("")} type="info" />
+      <Toast message={toastMessage} onClose={() => setToastMessage("")} type={toastType} />
 
       <div
         style={{
@@ -212,7 +227,11 @@ const Login = () => {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        <form onSubmit={handleSubmit} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          {/* Hidden inputs to capture aggressive browser password manager autofill */}
+          <input type="text" name="prevent_autofill_email" style={{ display: "none" }} tabIndex={-1} autoComplete="off" />
+          <input type="password" name="prevent_autofill_pwd" style={{ display: "none" }} tabIndex={-1} autoComplete="new-password" />
+
           <Input
             label="Email Address"
             type="email"
@@ -222,7 +241,7 @@ const Login = () => {
             onChange={(e) => setEmail(e.target.value)}
             error={errors.email}
             required
-            autoComplete="username"
+            autoComplete="off"
           />
 
           <Input
@@ -234,7 +253,7 @@ const Login = () => {
             onChange={(e) => setPassword(e.target.value)}
             error={errors.password}
             required
-            autoComplete="current-password"
+            autoComplete="new-password"
             rightElement={
               <button
                 type="button"
@@ -349,13 +368,33 @@ const Login = () => {
                 onChange={(event) => setRecoveryEmail(event.target.value)}
                 autoComplete="email"
                 required
+                autoFocus
               />
               <Button type="submit" variant="primary" size="md" fullWidth isLoading={recoveryLoading} icon={ArrowRight} iconPosition="right">
                 Send verification code
               </Button>
+              <div style={{ textAlign: "center", paddingTop: "0.5rem" }}>
+                <Link
+                  to={`/forgot-password?email=${encodeURIComponent(recoveryEmail)}`}
+                  onClick={() => setForgotModalOpen(false)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.3rem",
+                    fontSize: "0.8rem",
+                    color: "var(--text-muted)",
+                    textDecoration: "none"
+                  }}
+                >
+                  <ExternalLink size={13} /> Open full recovery page
+                </Link>
+              </div>
             </>
           ) : (
             <>
+              {/* Ensure browser password managers associate the new password with the user's email, never the OTP code */}
+              <input type="text" name="username" value={recoveryEmail} autoComplete="username" style={{ display: "none" }} readOnly />
+
               <p role="status" style={{ fontSize: "0.9rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
                 {recoveryMessage}
               </p>
@@ -371,10 +410,11 @@ const Login = () => {
                 pattern="[0-9]{6}"
                 maxLength={6}
                 required
+                style={{ letterSpacing: "4px", fontWeight: "700" }}
               />
               <Input
                 label="New Password"
-                type="password"
+                type={showRecoveryPassword ? "text" : "password"}
                 placeholder="At least 6 characters"
                 icon={Lock}
                 value={recoveryPassword}
@@ -382,10 +422,28 @@ const Login = () => {
                 autoComplete="new-password"
                 minLength={6}
                 required
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowRecoveryPassword(!showRecoveryPassword)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: 0
+                    }}
+                    aria-label={showRecoveryPassword ? "Hide password" : "Show password"}
+                  >
+                    {showRecoveryPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                }
               />
               <Input
                 label="Confirm New Password"
-                type="password"
+                type={showRecoveryConfirm ? "text" : "password"}
                 placeholder="Re-enter your new password"
                 icon={Lock}
                 value={recoveryPasswordConfirm}
@@ -393,7 +451,35 @@ const Login = () => {
                 autoComplete="new-password"
                 minLength={6}
                 required
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowRecoveryConfirm(!showRecoveryConfirm)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: 0
+                    }}
+                    aria-label={showRecoveryConfirm ? "Hide password" : "Show password"}
+                  >
+                    {showRecoveryConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                }
               />
+              {recoveryPassword && recoveryPasswordConfirm && recoveryPassword === recoveryPasswordConfirm && (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#16A34A", fontSize: "0.75rem", fontWeight: "600" }}>
+                  <CheckCircle2 size={14} /> Passwords match
+                </div>
+              )}
+              {recoveryPasswordConfirm && recoveryPassword !== recoveryPasswordConfirm && (
+                <div style={{ color: "#ef4444", fontSize: "0.75rem", fontWeight: "500" }}>
+                  Passwords do not match
+                </div>
+              )}
               <Button type="submit" variant="primary" size="md" fullWidth isLoading={recoveryLoading}>
                 Reset password
               </Button>

@@ -6,7 +6,7 @@ const nodemailer = require("nodemailer");
 
 process.env.JWT_SECRET = "test-password-reset-secret";
 process.env.PASSWORD_RESET_OTP_SECRET = "test-password-reset-otp-secret-32-bytes-minimum";
-process.env.SMTP_HOST = "smtp.example.test";
+process.env.SMTP_HOST = "127.0.0.1";
 process.env.SMTP_PORT = "587";
 process.env.SMTP_USER = "test@example.test";
 process.env.SMTP_PASS = "test-password";

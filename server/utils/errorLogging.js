@@ -4,8 +4,9 @@ const logInternalError = (context, error) => {
         ? ` (${error.code})`
         : "";
     const errorMessage = error?.message ? `: ${error.message}` : "";
+    const diagnostics = error?.diagnostics ? ` | diagnostics: ${JSON.stringify(error.diagnostics)}` : "";
 
-    console.error(`[${context}] ${errorName}${errorCode}${errorMessage}`);
+    console.error(`[${context}] ${errorName}${errorCode}${errorMessage}${diagnostics}`);
 };
 
 module.exports = { logInternalError };

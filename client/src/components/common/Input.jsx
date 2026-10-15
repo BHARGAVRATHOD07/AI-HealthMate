@@ -15,6 +15,7 @@ const Input = ({
   disabled = false,
   className = "",
   containerStyle = {},
+  style = {},
   ...props
 }) => {
   const generatedId = useId();
@@ -74,7 +75,8 @@ const Input = ({
             backgroundColor: "var(--bg-main)",
             color: "var(--text-main)",
             outline: "none",
-            transition: "all 0.15s ease"
+            transition: "all 0.15s ease",
+            ...style
           }}
           className={`input-field ${className}`}
           onFocus={(e) => {

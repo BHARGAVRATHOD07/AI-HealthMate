@@ -83,25 +83,46 @@ export const changeAuthenticatedPassword = async (currentPassword, newPassword) 
 };
 
 export const requestPasswordResetOtp = async (email) => {
-  const response = await fetch(`${API_URL}/api/auth/forgot-password/request`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || "Could not send the verification code.");
-  return data;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  try {
+    const response = await fetch(`${API_URL}/api/auth/forgot-password/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || "Could not send the verification code.");
+    }
+    return data;
+  } catch (error) {
+    if (error.name === "TypeError" && error.message.toLowerCase().includes("fetch")) {
+      throw new Error("Unable to reach the server. Please verify your connection or make sure the server is running.");
+    }
+    throw error;
+  }
 };
 
 export const resetPasswordWithOtp = async (email, code, newPassword) => {
-  const response = await fetch(`${API_URL}/api/auth/forgot-password/reset`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code, newPassword }),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || "Could not reset the password.");
-  return data;
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  const normalizedCode = typeof code === "string" ? code.trim() : "";
+  try {
+    const response = await fetch(`${API_URL}/api/auth/forgot-password/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, code: normalizedCode, newPassword }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || "Could not reset the password.");
+    }
+    return data;
+  } catch (error) {
+    if (error.name === "TypeError" && error.message.toLowerCase().includes("fetch")) {
+      throw new Error("Unable to reach the server. Please verify your connection or make sure the server is running.");
+    }
+    throw error;
+  }
 };
 
 /**
