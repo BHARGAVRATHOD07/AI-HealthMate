@@ -222,6 +222,7 @@ const Login = () => {
             onChange={(e) => setEmail(e.target.value)}
             error={errors.email}
             required
+            autoComplete="username"
           />
 
           <Input
@@ -233,6 +234,7 @@ const Login = () => {
             onChange={(e) => setPassword(e.target.value)}
             error={errors.password}
             required
+            autoComplete="current-password"
             rightElement={
               <button
                 type="button"

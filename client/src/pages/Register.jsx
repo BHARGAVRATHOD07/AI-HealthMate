@@ -164,6 +164,7 @@ const Register = () => {
             onChange={(e) => setEmail(e.target.value)}
             error={errors.email}
             required
+            autoComplete="off"
           />
 
           <Input
@@ -175,6 +176,7 @@ const Register = () => {
             onChange={(e) => setPassword(e.target.value)}
             error={errors.password}
             required
+            autoComplete="new-password"
             rightElement={
               <button
                 type="button"
@@ -223,6 +225,7 @@ const Register = () => {
             onChange={(e) => setConfirmPassword(e.target.value)}
             error={errors.confirmPassword}
             required
+            autoComplete="new-password"
           />
 
           <Button
